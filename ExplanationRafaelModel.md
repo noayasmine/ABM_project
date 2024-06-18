@@ -28,18 +28,18 @@ Influencers have three strategies for attracting followers, which involve being 
 Followers have three strategies for receiving recommended influencers from the system:
 1. **Random Recommendation**: A follower is recommended a random influencer from the random pool.
 2. **Targeted Recommendation**: A follower is recommended an influencer from the targeted pool, with the recommendation probability proportional to the audience fitness of the potential follower in the influencer's follower base. The audience fitness $A_{ij}$ is calculated as:
-   $$
-   A_{ij} = \sum_{k \in \text{Predecessors}(j)} \left( \text{similarity\_index}(i, k) \times e_{kj} \right) / \sum_{k \in \text{Predecessors}(j)}
-   $$
+   
+   ![image](https://github.com/noayasmine/ABM_project/assets/71283957/886c8112-221b-4c59-a81c-a12af83fd965)
+   
    where $e_{kj}$ is the engagement from follower $k$ to influencer $j$.
-3. **Most Popular Recommendation**: A follower is recommended an influencer from the most popular pool, with the recommendation probability proportional to the popularity (in-degree) of that influencer.
+4. **Most Popular Recommendation**: A follower is recommended an influencer from the most popular pool, with the recommendation probability proportional to the popularity (in-degree) of that influencer.
 
 ## Similarity Index
 
 The similarity index $S_{ij}$ between two nodes $i$ and $j$ is defined to measure the similarity of their influencers:
-$$
-S_{ij} = \frac{|C_i \cap C_j|}{|C_i| \cdot |C_j|} \times \sum_{k \in C_i \cap C_j} (0.9 - |e_{ik} - e_{jk}|)
-$$
+
+![image](https://github.com/noayasmine/ABM_project/assets/71283957/99fdd276-1ad5-4a57-ad31-161892fa7cf5)
+
 where $C_i$ and $C_j$ are the sets of common successors (influencers) of $i$ and $j$, respectively.
 
 ## Edge Maintenance Decision
