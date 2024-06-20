@@ -2,7 +2,12 @@
 
 ## Network Initialization
 
-The network is initialized as an Erdős–Rényi (ER) directed network $G(N, p)$, where $N$ is the number of nodes and $p$ is the probability of edge creation between any two nodes. Each edge $(u, v)$ in the network has an associated engagement value $e_{uv}$ randomly assigned within the range $[0.1, 0.9]$.
+Network is initially grown as a random but connected (Erdős–Rényi (ER) directed $G(N, p)$) directed network - implying that at the onset, all users are participating at least via single connection and no user has strategised on their participation yet, nor has the network actively influenced
+the growth via recommendation algorithms. Let’s assume as well that all connections at this stage are bi-directional.
+
+## Value Initialisation 
+
+Each edge $(u, v)$ in the network is given a radnomly assigned associated engagement value $e_{uv}$ randomly assigned within the range $[0.1, 0.9]$.
 
 ## Classification of Nodes
 
