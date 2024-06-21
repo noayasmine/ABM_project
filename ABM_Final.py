@@ -32,14 +32,17 @@ class SocialNetwork():
         self.concentration = concentration
 
         # {Node1 : IN_Degree, Node2 : IN_Degree}
-        self.IN_Degrees = defaultdict(int)
+        self.IN = defaultdict(int)
         # {Node1 : OUT_Degree, Node2 : OUT_Degree}
-        self.OUT_Degrees = defaultdict(int)
+        self.OUT = defaultdict(int)
         # {Node1 : {Follower1 : Engagement, Follower2 : Engagement}, Node2 : ETC}
-        self.Engagements = defaultdict(lambda: defaultdict(float))
-        # for user engagement: self.Engagements[follower][influencer]
-        # for the same user received engagement: self.Engagements[influencer][follower]
-        # for total engagement received sum(self.Engagements[agent].values())
+        # for user engagement: self.WEIGHT[follower][influencer]
+        self.WEIGHT = defaultdict(lambda: defaultdict(float))
+        # for engagement received from follower: self.UTILITIES[influencer][follower]
+        # for total engagement: sum(self.UTILITIES[influencer].values())
+        self.UTILITIES = defaultdict(lambda: defaultdict(float))
+
+        self.Data_Collector = {"avg engagement": [], "avg Degrees": [], "avg_clustering_coeff" : []}
 
         self.create_random_network()
     
@@ -48,23 +51,39 @@ class SocialNetwork():
         # add weights to the edges
         for node in self.G.nodes():
             out_edges = list(self.G.out_edges(node))
-            # self.OUT_Degrees[node] = len(out_edges)
+            # self.OUT[node] = len(out_edges)
             if out_edges:
                 # concentration affects the distribution of engagement (0.5 = uneven, 10.0 = even)
                 engagements = np.random.dirichlet(np.full(len(out_edges), self.concentration))
                 for (u, v), engagement in zip(out_edges, engagements):
-                    # self.G.edges[u, v]['weight'] = engagement
-                    self.Engagements[u][v] = engagement
-                    self.OUT_Degrees[u] += 1
-                    self.IN_Degrees[v] += 1
+                    self.WEIGHT[u][v] = engagement
+                    self.UTILITIES[v][u] = engagement
+                    self.OUT[u] += 1
+                    self.IN[v] += 1
     
     def normalize_weights(self):
-        for follower in self.Engagements:
-            total_engagement = sum(self.Engagements[follower].values())
-            self.Engagements[follower] = {influencer : engagement / total_engagement for 
-                                          influencer, engagement in self.Engagements[follower].items()}
-            
+        # normalize weights for each agent
+        for follower in self.WEIGHT:
+            total_engagement = sum(self.WEIGHT[follower].values())
+            self.WEIGHT[follower] = {influencer : engagement / total_engagement for 
+                                          influencer, engagement in self.WEIGHT[follower].items()}
+        # update received utilities
+        for follower in self.WEIGHT:
+            for influencer in self.WEIGHT[follower]:
+                self.UTILITIES[influencer][follower] = self.WEIGHT[follower][influencer]
+
+        # add to data collector
+        self.Data_Collector["avg engagement"].append(sum(sum(inner_dict.values()) 
+                                                         for inner_dict in self.UTILITIES.values()))
+                
+
+
     
+    # def evaluate_received_engagement(self, agent):
+        
+
+
+
         # for node in self.G.nodes:
         #     out_edges = list(self.G.out_edges(node, data=True))
         #     total_weight = sum(edge[2]['weight'] for edge in out_edges)
