@@ -86,7 +86,7 @@ class SocialNetwork():
             pass
         self.normalize_weights()
         self.track_metrics()
-        print(self.Data_Collector["avg IN degrees"])
+        # print(self.Data_Collector["avg IN degrees"])
 
     # def evaluate_received_engagement(self, agent):
         
@@ -99,9 +99,7 @@ model = SocialNetwork(n_agents, prob)
 for i in range(steps):
     model.step()
     print(f"\r{(i/steps)*100:.2f}%", end='', flush=True)
-# G = SocialNetwork(n_agents, prob)
-# G.normalize_weights()
 
-# pos = nx.spring_layout(G.G)
-# nx.draw(G.G, pos, with_labels=True, node_color='lightblue', edge_color='gray', node_size=500, font_size=15)
+# pos = nx.spring_layout(model.G)
+# nx.draw(model.G, pos, with_labels=True, node_color='lightblue', edge_color='gray', node_size=500, font_size=15)
 # plt.show()
