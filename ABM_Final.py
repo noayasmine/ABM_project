@@ -68,7 +68,7 @@ class SocialNetwork():
             self.OUT[follower] -= 1
             del self.WEIGHT[follower][exfollowee]
             self.IN[exfollowee] -= 1
-            del self.UTILITIES[follower][exfollowee]
+            del self.UTILITIES[exfollowee][follower]
     
     def track_metrics(self):
         # add to data collector
