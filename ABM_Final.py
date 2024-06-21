@@ -95,7 +95,7 @@ n_agents = 200
 avg_degree = 15
 prob = avg_degree/n_agents
 
-model = SocialNetwork(n_agents=100, prob=0.5)
+model = SocialNetwork(n_agents, prob)
 for i in range(steps):
     model.step()
     print(f"\r{(i/steps)*100:.2f}%", end='', flush=True)
