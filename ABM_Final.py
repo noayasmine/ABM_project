@@ -4,27 +4,6 @@ import random as r
 import numpy as np
 from collections import defaultdict
 
-
-# def create_random_network(n_agents, prob, concentration):
-#     G = nx.gnp_random_graph(n=n_agents, p=prob, directed=True)
-#     # add weights to the edges
-#     for node in G.nodes():
-#         out_edges = list(G.out_edges(node))
-#         if out_edges:
-#             # concentration affects the distribution of engagement (0.5 = uneven, 10.0 = even)
-#             engagements = np.random.dirichlet(np.full(len(out_edges), concentration))
-#             for (u, v), engagement in zip(out_edges, engagements):
-#                 G.edges[u, v]['weight'] = engagement
-#     return G
-
-# def normalize_weights(G: nx.DiGraph) -> nx.DiGraph:
-#     for node in G.nodes:
-#         out_edges = list(G.out_edges(node, data=True))
-#         total_weight = sum(edge[2]['weight'] for edge in out_edges)
-#         for edge in out_edges:
-#             edge[2]['weight'] = round(edge[2]['weight'] / total_weight, 3)
-#     return G
-
 class SocialNetwork():
     def __init__(self, n_agents, prob, concentration = 2.5):
         self.n_agents = n_agents
@@ -42,7 +21,8 @@ class SocialNetwork():
         # for total engagement: sum(self.UTILITIES[influencer].values())
         self.UTILITIES = defaultdict(lambda: defaultdict(float))
 
-        self.Data_Collector = {"avg engagement": [], "avg Degrees": [], "avg_clustering_coeff" : []}
+        self.Data_Collector = {"avg utility": [], "avg IN degrees": [], "avg OUT degrees" : [], 
+                               "avg path length" : [], "avg clustering coeff" : []}
 
         self.create_random_network()
     
@@ -61,6 +41,7 @@ class SocialNetwork():
                     self.OUT[u] += 1
                     self.IN[v] += 1
     
+    # to be done after each time step
     def normalize_weights(self):
         # normalize weights for each agent
         for follower in self.WEIGHT:
@@ -71,31 +52,56 @@ class SocialNetwork():
         for follower in self.WEIGHT:
             for influencer in self.WEIGHT[follower]:
                 self.UTILITIES[influencer][follower] = self.WEIGHT[follower][influencer]
-
-        # add to data collector
-        self.Data_Collector["avg engagement"].append(sum(sum(inner_dict.values()) 
-                                                         for inner_dict in self.UTILITIES.values()))
                 
+    def add_connection(self, follower, followee):
+        if not self.G.has_edge(follower, followee):
+            self.G.add_edge(follower, followee)
+            engagement = np.random.dirichlet(np.full(1, self.concentration))
+            self.OUT[follower] += 1
+            self.WEIGHT[follower][followee] = engagement
+            self.IN[followee] += 1
+            self.UTILITIES[follower][followee] = engagement
 
-
+    def remove_connection(self, follower, exfollowee):
+        if not self.G.has_edge(follower, exfollowee):
+            self.G.remove_edge(follower, exfollowee)
+            self.OUT[follower] -= 1
+            del self.WEIGHT[follower][exfollowee]
+            self.IN[exfollowee] -= 1
+            del self.UTILITIES[follower][exfollowee]
     
+    def track_metrics(self):
+        # add to data collector
+        self.Data_Collector["avg IN degrees"].append(sum(self.IN.values()) / self.n_agents)
+        self.Data_Collector["avg OUT degrees"].append(sum(self.OUT.values()) / self.n_agents)
+        self.Data_Collector["avg path length"].append(nx.average_shortest_path_length(self.G))
+        self.Data_Collector["avg clustering coeff"].append(nx.average_clustering(self.G))
+        self.Data_Collector["avg utility"].append(sum(sum(inner_dict.values()) 
+                                                         for inner_dict in self.UTILITIES.values()) / self.n_agents)
+        
+    def step(self):
+        for node in self.G.nodes():
+            # calculate which strategy to use
+            # implement strategy
+            pass
+        self.normalize_weights()
+        self.track_metrics()
+        print(self.Data_Collector["avg IN degrees"])
+
     # def evaluate_received_engagement(self, agent):
         
-
-
-
-        # for node in self.G.nodes:
-        #     out_edges = list(self.G.out_edges(node, data=True))
-        #     total_weight = sum(edge[2]['weight'] for edge in out_edges)
-        #     for edge in out_edges:
-        #         edge[2]['weight'] = round(edge[2]['weight'] / total_weight, 3)
-
-n_agents = 10
-avg_degree = 5
+steps = 2
+n_agents = 200
+avg_degree = 15
 prob = avg_degree/n_agents
-G = SocialNetwork(n_agents, prob)
-G.normalize_weights()
 
-pos = nx.spring_layout(G.G)
-nx.draw(G.G, pos, with_labels=True, node_color='lightblue', edge_color='gray', node_size=500, font_size=15)
-plt.show()
+model = SocialNetwork(n_agents=100, prob=0.5)
+for i in range(steps):
+    model.step()
+    print(f"\r{(i/steps)*100:.2f}%", end='', flush=True)
+# G = SocialNetwork(n_agents, prob)
+# G.normalize_weights()
+
+# pos = nx.spring_layout(G.G)
+# nx.draw(G.G, pos, with_labels=True, node_color='lightblue', edge_color='gray', node_size=500, font_size=15)
+# plt.show()
