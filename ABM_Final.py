@@ -37,8 +37,9 @@ class SocialNetwork():
         self.OUT_Degrees = defaultdict(int)
         # {Node1 : {Follower1 : Engagement, Follower2 : Engagement}, Node2 : ETC}
         self.Engagements = defaultdict(lambda: defaultdict(float))
-        # for out engagement: self.Engagements[follower][influencer]
-        # for in engagement: self.Engagements[influencer][follower]
+        # for user engagement: self.Engagements[follower][influencer]
+        # for the same user received engagement: self.Engagements[influencer][follower]
+        # for total engagement received sum(self.Engagements[agent].values())
 
         self.create_random_network()
     
@@ -47,18 +48,23 @@ class SocialNetwork():
         # add weights to the edges
         for node in self.G.nodes():
             out_edges = list(self.G.out_edges(node))
+            # self.OUT_Degrees[node] = len(out_edges)
             if out_edges:
                 # concentration affects the distribution of engagement (0.5 = uneven, 10.0 = even)
                 engagements = np.random.dirichlet(np.full(len(out_edges), self.concentration))
                 for (u, v), engagement in zip(out_edges, engagements):
                     # self.G.edges[u, v]['weight'] = engagement
                     self.Engagements[u][v] = engagement
+                    self.OUT_Degrees[u] += 1
+                    self.IN_Degrees[v] += 1
     
     def normalize_weights(self):
         for follower in self.Engagements:
             total_engagement = sum(self.Engagements[follower].values())
             self.Engagements[follower] = {influencer : engagement / total_engagement for 
                                           influencer, engagement in self.Engagements[follower].items()}
+            
+    
         # for node in self.G.nodes:
         #     out_edges = list(self.G.out_edges(node, data=True))
         #     total_weight = sum(edge[2]['weight'] for edge in out_edges)
