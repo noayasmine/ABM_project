@@ -2,6 +2,8 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import random as r
 import numpy as np
+from collections import defaultdict
+
 
 # def create_random_network(n_agents, prob, concentration):
 #     G = nx.gnp_random_graph(n=n_agents, p=prob, directed=True)
@@ -29,6 +31,15 @@ class SocialNetwork():
         self.prob = prob
         self.concentration = concentration
 
+        # {Node1 : IN_Degree, Node2 : IN_Degree}
+        self.IN_Degrees = defaultdict(int)
+        # {Node1 : OUT_Degree, Node2 : OUT_Degree}
+        self.OUT_Degrees = defaultdict(int)
+        # {Node1 : {Follower1 : Engagement, Follower2 : Engagement}, Node2 : ETC}
+        self.Engagements = defaultdict(lambda: defaultdict(float))
+        # for out engagement: self.Engagements[follower][influencer]
+        # for in engagement: self.Engagements[influencer][follower]
+
         self.create_random_network()
     
     def create_random_network(self):
@@ -40,21 +51,19 @@ class SocialNetwork():
                 # concentration affects the distribution of engagement (0.5 = uneven, 10.0 = even)
                 engagements = np.random.dirichlet(np.full(len(out_edges), self.concentration))
                 for (u, v), engagement in zip(out_edges, engagements):
-                    self.G.edges[u, v]['weight'] = engagement
+                    # self.G.edges[u, v]['weight'] = engagement
+                    self.Engagements[u][v] = engagement
     
     def normalize_weights(self):
-        for node in self.G.nodes:
-            out_edges = list(self.G.out_edges(node, data=True))
-            total_weight = sum(edge[2]['weight'] for edge in out_edges)
-            for edge in out_edges:
-                edge[2]['weight'] = round(edge[2]['weight'] / total_weight, 3)
-
-
-"""
-{NODE1: {Followed_NODE1 : engagement}, Followed_NODE2 : engagement, 
-    NODE2: {Followed_NODE1 : engagement}, Followed_NODE2 : engagement}
-}
-"""
+        for follower in self.Engagements:
+            total_engagement = sum(self.Engagements[follower].values())
+            self.Engagements[follower] = {influencer : engagement / total_engagement for 
+                                          influencer, engagement in self.Engagements[follower].items()}
+        # for node in self.G.nodes:
+        #     out_edges = list(self.G.out_edges(node, data=True))
+        #     total_weight = sum(edge[2]['weight'] for edge in out_edges)
+        #     for edge in out_edges:
+        #         edge[2]['weight'] = round(edge[2]['weight'] / total_weight, 3)
 
 n_agents = 10
 avg_degree = 5
