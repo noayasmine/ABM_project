@@ -60,7 +60,7 @@ class SocialNetwork():
             self.OUT[follower] += 1
             self.WEIGHT[follower][followee] = engagement
             self.IN[followee] += 1
-            self.UTILITIES[follower][followee] = engagement
+            self.UTILITIES[followee][follower] = engagement
 
     def remove_connection(self, follower, exfollowee):
         if not self.G.has_edge(follower, exfollowee):
