@@ -56,7 +56,7 @@ class SocialNetwork():
     def add_connection(self, follower, followee):
         if not self.G.has_edge(follower, followee):
             self.G.add_edge(follower, followee)
-            engagement = np.random.dirichlet(np.full(1, self.concentration))
+            engagement = r.uniform(0, 1)
             self.OUT[follower] += 1
             self.WEIGHT[follower][followee] = engagement
             self.IN[followee] += 1
