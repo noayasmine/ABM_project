@@ -22,8 +22,9 @@ class SocialNetwork():
         # for engagement received from follower: self.UTILITIES[influencer][follower]
         # for total engagement: sum(self.UTILITIES[influencer].values())
         self.UTILITIES = defaultdict(lambda: defaultdict(float))
-
-        self.SHORTHEST_PATH = defaultdict(int)
+        self.OPINIONS = {i: r.uniform(0, 1) for i in range(n_agents)}
+        
+        self.SHORTEST_PATH = defaultdict(int)
 
         # self.Data_Collector = {"avg utility": [], "avg IN degrees": [], "avg OUT degrees" : [], 
         #                        "avg path length" : [], "avg clustering coeff" : []}
@@ -46,7 +47,7 @@ class SocialNetwork():
                     self.UTILITIES[v][u] = engagement
                     self.OUT[u] += 1
                     self.IN[v] += 1
-        self.SHORTHEST_PATH = dict(nx.shortest_path_length(self.G))
+        self.SHORTEST_PATH = dict(nx.shortest_path_length(self.G))
     
     # to be done after each time step
     def normalize_weights(self):
@@ -64,7 +65,7 @@ class SocialNetwork():
 
         # this is now only based on how far away someone is
         # if path is shorter: more likely to make connection
-        options = self.SHORTHEST_PATH[unique_id]
+        options = self.SHORTEST_PATH[unique_id]
 
         # remove the nodes that are already directly connected
         filtered_options = {key: value for key, value in options.items() if value not in {0, 1}}
@@ -81,92 +82,123 @@ class SocialNetwork():
             return followee
         else:
             return (unique_id + 1)
+        
+    def choose_to_follow_option2(self, unique_id):
+        """Choose a candidate to follow based on shortest path probabilities and opinion similarity."""
+        candidates = self.SHORTEST_PATH[unique_id]
 
+        # Filter candidates with shortest path > 1 (not already directly connected)
+        candidates = {key: value for key, value in candidates.items() if value not in {0, 1}}
+
+        if not candidates:
+            return None  # No valid candidates found
+
+        # Calculate probabilities based on shortest path lengths and opinion similarity
+        probabilities = []
+        for candidate, shortest_path_length in candidates.items():
+
+            path_similarity = 1 / (shortest_path_length + 1)
+            opinion_similarity = (1 / (1 - np.exp(-1))) * (
+                np.exp(-abs(self.OPINIONS[unique_id] - self.OPINIONS[candidate])) - np.exp(-1))
+            total_similarity = path_similarity * opinion_similarity
+            probabilities.append(total_similarity)
+
+        # Normalize probabilities
+        total_prob = sum(probabilities)
+        if total_prob == 0:
+            return None  # No valid probabilities
+
+        probabilities = [p / total_prob for p in probabilities]
+
+        # Choose a candidate based on the calculated probabilities
+        chosen_candidate = r.choices(list(candidates.keys()), weights=probabilities, k=1)[0]
+        return chosen_candidate
+        
     def choose_to_unfollow(self, unique_id):
-        """for now it chooses someone completely random to unfollow"""
-        list = self.G.edges(unique_id)
-        options = []
-        for i in list:
-            options.append(i[1])
-        if len(options) != 0:
-            return r.choice(options)
-        else:
-            return
+        """Choose a random follower to unfollow."""
+        followees = list(self.G.successors(unique_id))
+        if followees:
+            return r.choice(followees)
+        return None
 
     def add_connection(self, follower, followee):
+        """Add a directed edge between follower and followee."""
         if not self.G.has_edge(follower, followee):
             self.G.add_edge(follower, followee)
             engagement = r.uniform(0, 1)
-            self.OUT[follower] += 1
             self.WEIGHT[follower][followee] = engagement
-            self.IN[followee] += 1
             self.UTILITIES[followee][follower] = engagement
+            self.OUT[follower] += 1
+            self.IN[followee] += 1
 
-    def remove_connection(self, follower, exfollowee):
-        if self.G.has_edge(follower, exfollowee):
-            self.G.remove_edge(follower, exfollowee)
+    def remove_connection(self, follower, followee):
+        """Remove a directed edge between follower and followee."""
+        if self.G.has_edge(follower, followee):
+            self.G.remove_edge(follower, followee)
+            del self.WEIGHT[follower][followee]
+            del self.UTILITIES[followee][follower]
             self.OUT[follower] -= 1
-            del self.WEIGHT[follower][exfollowee]
-            self.IN[exfollowee] -= 1
-            del self.UTILITIES[exfollowee][follower]
-    
+            self.IN[followee] -= 1
+
     def track_metrics(self):
-        # add to data collector
-        self.Data_Collector["avg IN degrees"].append(sum(self.IN.values()) / self.n_agents)
-        self.Data_Collector["avg OUT degrees"].append(sum(self.OUT.values()) / self.n_agents)
-        #self.Data_Collector["avg path length"].append(nx.average_shortest_path_length(self.G))
-        self.Data_Collector["avg clustering coeff"].append(nx.average_clustering(self.G))
-        self.Data_Collector["avg utility"].append(sum(sum(inner_dict.values()) 
-                                                         for inner_dict in self.UTILITIES.values()) / self.n_agents)
-        
+        """Track metrics such as average degrees and clustering coefficient."""
+        avg_in_degree = sum(self.IN.values()) / self.n_agents
+        avg_out_degree = sum(self.OUT.values()) / self.n_agents
+        avg_clustering_coeff = nx.average_clustering(self.G)
+        avg_utility = sum(sum(inner_dict.values()) for inner_dict in self.UTILITIES.values()) / self.n_agents
+
+        self.Data_Collector["avg IN degrees"].append(avg_in_degree)
+        self.Data_Collector["avg OUT degrees"].append(avg_out_degree)
+        self.Data_Collector["avg clustering coeff"].append(avg_clustering_coeff)
+        self.Data_Collector["avg utility"].append(avg_utility)
+
     def step(self):
+        """Execute one simulation step."""
         edges_to_add = []
         edges_to_remove = []
-        # each agent does an action
+
         for node in self.G.nodes():
-            in_engagement = sum(self.UTILITIES[node].values())
-            # this strategy needs to become something more realistic and less simple
-            # 
             if self.IN[node] > self.OUT[node]:
-                followee = self.choose_to_follow(node)
-                edges_to_add.append((node, followee))
+                followee = self.choose_to_follow_option2(node)
+                if followee is not None:
+                    edges_to_add.append((node, followee))
             elif self.IN[node] < self.OUT[node]:
                 exfollowee = self.choose_to_unfollow(node)
-                edges_to_remove.append((node, exfollowee))
-        
-        for i in edges_to_add:
-            self.add_connection(i[0], i[1])
+                if exfollowee is not None:
+                    edges_to_remove.append((node, exfollowee))
 
-        for i in edges_to_remove:
-            self.remove_connection(i[0], i[1])
-            # calculate which strategy to use
-            # implement strategy
+        for follower, followee in edges_to_add:
+            self.add_connection(follower, followee)
+
+        for follower, exfollowee in edges_to_remove:
+            self.remove_connection(follower, exfollowee)
+
         self.normalize_weights()
         self.track_metrics()
-        # update shortest path
-        self.SHORTHEST_PATH = dict(nx.shortest_path_length(self.G))
 
-    # def evaluate_received_engagement(self, agent):
-        
+        # Update shortest paths after making changes
+        self.SHORTEST_PATH = dict(nx.shortest_path_length(self.G))
+
+# Parameters
 steps = 200
 n_agents = 100
 avg_degree = 25
-prob = avg_degree/n_agents
+prob = avg_degree / n_agents
 
+
+# Initialize and run the model
 model = SocialNetwork(n_agents, prob)
-for i in range(steps+1):
+
+for i in range(steps + 1):
     model.step()
-    print(f"\r{(i/steps)*100:.2f}%", end='', flush=True)
+    print(f"\rProgress: {(i / steps) * 100:.2f}%", end='', flush=True)
 
+# Save results to CSV
 df_results = pd.DataFrame(model.Data_Collector)
-df_results.to_csv("test.csv")
-#print(df_results)
+df_results.to_csv("social_network_metrics.csv", index=False)
 
-#pos = nx.spring_layout(model.G)
-#nx.draw(model.G, pos, with_labels=True, node_color='lightblue', edge_color='gray', node_size=500, font_size=15)
-#plt.show()
-
-ig, axs = plt.subplots(4, 1, figsize=(10, 50))
+# Plotting metrics
+fig, axs = plt.subplots(4, 1, figsize=(10, 20))
 
 axs[0].plot(df_results.index, df_results["avg OUT degrees"], label='Average Out-Degree')
 axs[0].set_title('Average Out-Degree over Time')
@@ -186,19 +218,22 @@ axs[2].set_xlabel('Time Step')
 axs[2].set_ylabel('Clustering Coefficient')
 axs[2].legend()
 
-axs[3].plot(df_results.index, df_results["avg utility"], label='Utility', color='blue')
+axs[3].plot(df_results.index, df_results["avg utility"], label='Average Utility', color='blue')
 axs[3].set_title('Average Utility over Time')
 axs[3].set_xlabel('Time Step')
 axs[3].set_ylabel('Utility')
 axs[3].legend()
 
-#axs[4].plot(df_results.index, df_results["avg path length"], label='Average Path Length', color='red')
-#axs[4].set_title('Average Path Length over Time')
-#axs[4].set_xlabel('Time Step')
-#axs[4].set_ylabel('Path Length')
-#axs[4].legend()
-
 plt.tight_layout()
 plt.show()
 
 
+
+
+
+
+
+
+            
+
+ 
