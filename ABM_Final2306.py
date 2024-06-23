@@ -31,6 +31,7 @@ class SocialNetwork():
         # for total engagement: sum(self.UTILITIES[influencer].values())
         self.UTILITIES = defaultdict(lambda: defaultdict(float))
         self.OPINIONS = {i: r.uniform(0, 1) for i in range(n_agents)}
+        self.MAX = defaultdict(int)
         
         self.SHORTEST_PATH = defaultdict(int)
         self.Data_Collector = {"avg utility": [], "avg IN degrees": [], "avg OUT degrees" : [], 
@@ -49,6 +50,7 @@ class SocialNetwork():
                     self.UTILITIES[v][u] = engagement
                     self.OUT[u] += 1
                     self.IN[v] += 1
+            self.MAX[node] = r.choice(range(self.G.out_degree(node), n_agents))
         self.SHORTEST_PATH = dict(nx.shortest_path_length(self.G))
     
     
@@ -170,23 +172,28 @@ class SocialNetwork():
             # use logit to map difference of in and out degree to [0,1]
             # do we want to use this?
             utility = 1 / (1 + np.exp(-(self.IN[node] - self.OUT[node])))
-            
-            #highest_utility, highest_utility_candidate = self.highest_utility_candidates(node)
-            highest_utility_result = self.highest_utility_candidates_v2(node)
-            if highest_utility_result is not None:
-                highest_utility, highest_utility_candidate = highest_utility_result
-                if highest_utility > utility:
-                    #print('follow')
-                    edges_to_add.append((node, highest_utility_candidate))
-                    
-            # how do we define this?
-            #lowest_utility, lowest_utility_candidate = self.lowest_utility_candidates(node)
-            lowest_utility_result = self.lowest_utility_candidates_v2(node)
-            if lowest_utility_result is not None:
-                lowest_utility, lowest_utility_candidate = lowest_utility_result
-                if lowest_utility < utility:
-                    #print('unfollow')
+
+            if self.G.out_degree(node) >= self.MAX[node]:
+                lowest_utility_candidate = self.lowest_utility_candidates_v2(node)
+                if lowest_utility_candidate is not None:
                     edges_to_remove.append((node, lowest_utility_candidate))
+            else:
+                #highest_utility, highest_utility_candidate = self.highest_utility_candidates(node)
+                highest_utility_result = self.highest_utility_candidates_v2(node)
+                if highest_utility_result is not None:
+                    highest_utility, highest_utility_candidate = highest_utility_result
+                    if highest_utility > utility:
+                        #print('follow')
+                        edges_to_add.append((node, highest_utility_candidate))
+                        
+                # how do we define this?
+                #lowest_utility, lowest_utility_candidate = self.lowest_utility_candidates(node)
+                lowest_utility_result = self.lowest_utility_candidates_v2(node)
+                if lowest_utility_result is not None:
+                    lowest_utility, lowest_utility_candidate = lowest_utility_result
+                    if lowest_utility < utility:
+                        #print('unfollow')
+                        edges_to_remove.append((node, lowest_utility_candidate))
                     
 
         for follower, followee in edges_to_add:
@@ -217,32 +224,33 @@ df_results = pd.DataFrame(model.Data_Collector)
 df_results.to_csv("social_network_metrics.csv", index=False)
 
 # Plotting metrics
-fig, axs = plt.subplots(4, 1, figsize=(10, 20))
+fig, axs = plt.subplots(4, 1, figsize=(5, 20))
 
 axs[0].plot(df_results.index, df_results["avg OUT degrees"], label='Average Out-Degree')
-axs[0].set_title('Average Out-Degree over Time')
+#axs[0].set_title('Average Out-Degree over Time')
 axs[0].set_xlabel('Time Step')
 axs[0].set_ylabel('Average Out-Degree')
 axs[0].legend()
 
 axs[1].plot(df_results.index, df_results["avg IN degrees"], label='Average In-Degree', color='orange')
-axs[1].set_title('Average In-Degree over Time')
+#axs[1].set_title('Average In-Degree over Time')
 axs[1].set_xlabel('Time Step')
 axs[1].set_ylabel('Average In-Degree')
 axs[1].legend()
 
 axs[2].plot(df_results.index, df_results["avg clustering coeff"], label='Average Clustering Coefficient', color='green')
-axs[2].set_title('Average Clustering Coefficient over Time')
+#axs[2].set_title('Average Clustering Coefficient over Time')
 axs[2].set_xlabel('Time Step')
 axs[2].set_ylabel('Clustering Coefficient')
 axs[2].legend()
 
 axs[3].plot(df_results.index, df_results["avg utility"], label='Average Utility', color='blue')
-axs[3].set_title('Average Utility over Time')
+#axs[3].set_title('Average Utility over Time')
 axs[3].set_xlabel('Time Step')
 axs[3].set_ylabel('Utility')
 axs[3].legend()
 
+#plt.subplots_adjust(hspace=5.0)
 plt.tight_layout()
 plt.show()
 
@@ -312,6 +320,6 @@ def plot_degree_distribution(G):
 
 # Use the functions
 # Use the function with the modified edge labels
-plot_network(model.G, model.WEIGHT)
-check_network_connectivity(model.G)
+#plot_network(model.G, model.WEIGHT)
+#check_network_connectivity(model.G)
 plot_degree_distribution(model.G)
