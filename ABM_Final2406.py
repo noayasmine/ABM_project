@@ -1,9 +1,28 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sat Jun 22 13:58:09 2024
+@author Francijn
 
-@author: noaroebersen
+24/06 - in each time step; an agent has an encounter with someone.
+The choice with whom an agent has an encounter with is probabilistic:
+and based on popularity with weight p, and path length, with weight 1 - p.
+
+Then depending on whether this encountered agent is already being followed or not;
+the agent takes an action:
+    if not following yet:
+        if agents are similar (within the threshold decided per simulation):
+            follow
+        else
+            do nothing
+    if already following:
+        if engagement is lower than engagement threshold (also set per simulation):
+            unfollow
+        else
+            do nothing
+
+By changing the threshold values and the weights of the importance of popularity and pathlength in having an encounter
+we can see what values lead to network structures with highly popular individuals (influencers)
+NOT SURE YET WHAT EXACT RESEARCH QUESTION WOULD MAKE SENSE THOUGH
 """
 
 import numpy as np
@@ -68,67 +87,7 @@ class SocialNetwork():
                 self.UTILITIES[influencer][follower] = self.WEIGHT[follower][influencer]
 
 
-    def utility_score(self, agent, followee, w_pop, w_prox):
-        #w_engagement = 0.2
-        #w_proximity = 0.2
-        probs = []
-        for followee in self.G.nodes():
-            # chances of an agent following themselves is 0
-            if agent == followee:
-                probs.append(0)
-            # popularity is based on the number of followers / total who could follow you (so n_agents)
-            U_popularity = self.IN[followee] / self.n_agents
-        #U_similarity = 1 - abs(self.OPINIONS[follower] - self.OPINIONS[followee])
-        #U_engagement = sum(self.WEIGHT[follower][n] * self.WEIGHT[followee][n] for n in set(self.WEIGHT[follower]) & set(self.WEIGHT[followee]))
-            # if someone is close to you, they have an
-            U_proximity = 1 / (self.SHORTEST_PATH[agent][followee] + 1)
-
-        U_total = (w_pop * U_popularity + 
-                   #w_sim * U_similarity)
-                   #w_engagement * U_engagement + 
-                   w_prox * U_proximity)
-        
-        return U_total
-    
-    def highest_utility_candidates(self, unique_id):
-        candidates = self.SHORTEST_PATH[unique_id]
-        # now modelled as a 'seeing' of 3 i.e. take into account 'neighbors of neighbors' and and 'friends of friends of friends'
-
-        candidates = {key: value for key, value in candidates.items() if value in {2,3}}
-
-        if not candidates:
-            return None
-
-        utility_scores = {candidate: self.utility_score(unique_id, candidate,self.w_pop, self.w_sim) for candidate in candidates}
-        max_utility_candidate = max(utility_scores, key=utility_scores.get)
-        #print(utility_scores[max_utility_candidate], max_utility_candidate)
-        return utility_scores[max_utility_candidate], max_utility_candidate
-    
-    def highest_utility_candidates_v2(self, unique_id):
-        candidates = self.SHORTEST_PATH[unique_id]
-        # now modelled as a 'seeing' of 3 i.e. take into account 'neighbors of neighbors' and and 'friends of friends of friends'
-
-        candidates = {key: value for key, value in candidates.items() if value in {2,3}}
-        
-        if not candidates:
-            return None
-
-        random_candidate = r.choice(list(candidates.keys()))
-
-        utility_score = self.utility_score(unique_id, random_candidate)
-
-        return utility_score, random_candidate
-        
     def lowest_utility_candidates(self, unique_id):
-        candidates = self.SHORTEST_PATH[unique_id]
-        # get neighbors
-        candidates = {key: value for key, value in candidates.items() if value in {1}}
-        engagement_scores = {candidate: self.WEIGHT[unique_id][candidate] for candidate in candidates}
-        min_engagement_candidate = max(engagement_scores, key=engagement_scores.get)
-        
-        return engagement_scores[min_engagement_candidate], min_engagement_candidate
-    
-    def lowest_utility_candidates_v2(self, unique_id):
         candidates = self.SHORTEST_PATH[unique_id]
         # get neighbors
         candidates = {key: value for key, value in candidates.items() if value in {1}}
@@ -220,7 +179,7 @@ class SocialNetwork():
             # if you are already at the max of your following number; 
             # unfollow someone (with whom you have low engagement)
             if self.G.out_degree(node) >= self.MAX[node]:
-                lowest_utility_candidate = self.lowest_utility_candidates_v2(node)
+                lowest_utility_candidate = self.lowest_utility_candidates(node)
                 if lowest_utility_candidate is not None:
                     edges_to_remove.append((node, lowest_utility_candidate))
             else:
