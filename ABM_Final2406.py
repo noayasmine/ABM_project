@@ -124,9 +124,9 @@ class SocialNetwork():
                 # if shortest path is 1 or 2, then they have an equal probablity to be encountered
                 # if shortest path is longer than that, than probability of encounter is relative to path length
                 if self.SHORTEST_PATH[agent][followee] == 1:
-                    U_proximity = 1 - (2/100)
+                    U_proximity = 1 - (2/max(self.SHORTEST_PATH[agent].values()))
                 else:
-                    U_proximity = 1  - (self.SHORTEST_PATH[agent][followee]/100)
+                    U_proximity = 1  - (self.SHORTEST_PATH[agent][followee]/max(self.SHORTEST_PATH[agent].values()))
 
                 U_total = (w_pop * U_popularity + 
                    #w_sim * U_similarity)
@@ -211,8 +211,8 @@ class SocialNetwork():
         self.SHORTEST_PATH = dict(nx.shortest_path_length(self.G))
 
 # Parameters
-steps = 200
-n_agents = 100
+steps = 800
+n_agents = 250
 avg_degree = 25
 prob = avg_degree / n_agents
 
