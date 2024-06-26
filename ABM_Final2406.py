@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 @author Francijn
@@ -32,9 +33,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import random as r
 from collections import defaultdict
+from scipy.special import expit
 
 class SocialNetwork():
-    def __init__(self, n_agents, prob, concentration, follow_threshold, unfollow_threshold, w_pop, w_prox):
+    def __init__(self, n_agents, prob, concentration, follow_threshold, unfollow_threshold, w_pop, w_prox, w_sim, mu, temp):
         self.n_agents = n_agents
         self.prob = prob
         self.concentration = concentration
@@ -42,6 +44,10 @@ class SocialNetwork():
         self.unfollow_threshold = unfollow_threshold
         self.w_pop = w_pop
         self.w_prox = w_prox
+        self.w_sim = w_sim
+        self.prob = prob
+        self.mu = mu
+        self.temperature = temp
 
         # {Node1 : IN_Degree, Node2 : IN_Degree}
         self.IN = defaultdict(int)
@@ -63,11 +69,13 @@ class SocialNetwork():
     
     def create_random_network(self):
         self.G = nx.gnp_random_graph(n=self.n_agents, p=self.prob, directed=True)
+        #self.G = nx.watts_strogatz_graph(n=self.n_agents, k=self.k_graph, p=self.p_graph, seed=None)
         # add weights to the edges
         for node in self.G.nodes():
             out_edges = list(self.G.out_edges(node))
             if out_edges:
-                engagements = np.random.dirichlet(np.full(len(out_edges), self.concentration))
+                #engagements = np.random.dirichlet(np.full(len(out_edges), self.concentration))
+                engagements = np.random.uniform(0,1,len(out_edges))
                 for (u, v), engagement in zip(out_edges, engagements):
                     self.WEIGHT[u][v] = engagement
                     self.UTILITIES[v][u] = engagement
@@ -86,59 +94,46 @@ class SocialNetwork():
             for influencer in self.WEIGHT[follower]:
                 self.UTILITIES[influencer][follower] = self.WEIGHT[follower][influencer]
 
+    def utility_score(self, follower, followee):
+        # normalize popularity by in_connections / total_connections
+        U_popularity = self.IN[follower] / max(self.IN)
+        U_similarity = 1 - abs(self.OPINIONS[follower] - self.OPINIONS[followee])
+        # 1 / shortestpath, shortest_path is int >= 2
+        U_proximity = 1 - (self.SHORTEST_PATH[follower][followee] / max(self.SHORTEST_PATH[follower].values()))
 
-    def lowest_utility_candidates(self, unique_id):
-        candidates = self.SHORTEST_PATH[unique_id]
-        # get neighbors
-        candidates = {key: value for key, value in candidates.items() if value in {1}}
-        engagement_scores = {candidate: self.WEIGHT[unique_id][candidate] for candidate in candidates}
-        random_candidate = r.choice(list(candidates.keys()))
+        U_total = (self.w_pop * U_popularity + 
+                   self.w_sim * U_similarity +
+                   self.w_prox * U_proximity)
         
-        return engagement_scores[random_candidate], random_candidate
+        return U_total
     
     def decide_to_follow(self, follower, followee, follow_threshold):
-        if abs(self.OPINIONS[follower] - self.OPINIONS[followee]) <= follow_threshold:
+        #if abs(self.OPINIONS[follower] - self.OPINIONS[followee]) <= follow_threshold:
+        if self.utility_score(follower,followee) >= np.random.uniform(0,1):
             return True
         else:
             return False
 
     def decide_to_unfollow(self, follower, followee, unfollow_threshold):
-        if self.WEIGHT[follower][followee] <= unfollow_threshold:
+        if 1 - self.WEIGHT[follower][followee] <= np.random.uniform(0,1):
             return True
         else:
             return False
-
-    def have_encounter_with(self, agent, w_pop, w_prox):
-        probs = []
-        agents = []
-        for followee in self.G.nodes():
-            # chances of an agent following themselves is 0
-            agents.append(followee)
-            if agent == followee:
-                probs.append(0)
-            else:
-            # popularity is based on the number of followers / total who could follow you (so n_agents)
-                U_popularity = self.IN[followee] / self.n_agents
-        #U_similarity = 1 - abs(self.OPINIONS[follower] - self.OPINIONS[followee])
-        #U_engagement = sum(self.WEIGHT[follower][n] * self.WEIGHT[followee][n] for n in set(self.WEIGHT[follower]) & set(self.WEIGHT[followee]))
-                # if shortest path is 1 or 2, then they have an equal probablity to be encountered
-                # if shortest path is longer than that, than probability of encounter is relative to path length
-                if self.SHORTEST_PATH[agent][followee] == 1:
-                    U_proximity = 1 - (2/max(self.SHORTEST_PATH[agent].values()))
-                else:
-                    U_proximity = 1  - (self.SHORTEST_PATH[agent][followee]/max(self.SHORTEST_PATH[agent].values()))
-
-                U_total = (w_pop * U_popularity + 
-                   #w_sim * U_similarity)
-                   #w_engagement * U_engagement + 
-                   w_prox * U_proximity)
-            
-                probs.append(U_total)
-        
-        norm_probs = []
-        # normalize probabilities
-        for prob in probs:
-            norm_probs.append((prob/sum(probs)))
+    
+    def have_encounter_with(self, agent):
+        """Use fermi-dirac"""
+        agents = list(self.G.nodes())
+        agents.remove(agent)  # Removing the agent itself from the list
+    
+        distances = np.array([self.SHORTEST_PATH[agent][followee] for followee in agents])
+        exponents = (distances / max(distances) - self.mu) / self.temperature
+        probs = expit(-exponents)
+    
+        total_prob = np.sum(probs)
+        if total_prob == 0:
+            norm_probs = np.zeros_like(probs)
+        else:
+            norm_probs = probs / total_prob
 
         encounter = r.choices(agents, weights=norm_probs, k=1)
         return encounter[0]
@@ -178,25 +173,28 @@ class SocialNetwork():
         for node in self.G.nodes():
             # if you are already at the max of your following number; 
             # unfollow someone (with whom you have low engagement)
-            if self.G.out_degree(node) >= self.MAX[node]:
-                lowest_utility_candidate = self.lowest_utility_candidates(node)
-                if lowest_utility_candidate is not None:
-                    edges_to_remove.append((node, lowest_utility_candidate))
-            else:
+            #if self.G.out_degree(node) >= self.MAX[node]:
+                #lowest_utility_candidate = self.lowest_utility_candidates(node)
+                #if lowest_utility_candidate is not None:
+                    #edges_to_remove.append((node, lowest_utility_candidate))
+            
                 # choose an agent based (higher probability to be picked depending on
                 # path length and popularity)
-                encountered = self.have_encounter_with(node, self.w_pop, self.w_prox)
-                # in this case the agent does not follow the potential followee yet
-                if self.SHORTEST_PATH[node][encountered] > 1:
-                # if the agent does not follow the person yet; 
-                # decide if you want to follow (based on opinion similarity)
-                        if self.decide_to_follow(node, encountered, self.follow_threshold):
-                            edges_to_add.append((node, encountered))
-                # if the agent does already follow, check if you want to keep following
-                # based on engagement
-                elif self.SHORTEST_PATH[node][encountered] == 1:
-                    if self.decide_to_unfollow(node, encountered, self.unfollow_threshold):
-                        edges_to_remove.append((node, encountered))
+                
+            encountered = self.have_encounter_with(node)
+            # in this case the agent does not follow the potential followee yet
+            
+            if self.SHORTEST_PATH[node][encountered] > 1:
+            # if the agent does not follow the person yet; 
+            # decide if you want to follow (based on opinion similarity)
+                    if self.decide_to_follow(node, encountered, self.follow_threshold):
+                        edges_to_add.append((node, encountered))
+                        
+            # if the agent does already follow, check if you want to keep following
+            # based on engagement
+            elif self.SHORTEST_PATH[node][encountered] == 1:
+                if self.decide_to_unfollow(node, encountered, self.unfollow_threshold):
+                    edges_to_remove.append((node, encountered))
                     
         # for computational reasons first all agents do an action
         # after that the actual network is changed
@@ -206,14 +204,14 @@ class SocialNetwork():
         for follower, exfollowee in edges_to_remove:
             self.remove_connection(follower, exfollowee)
 
-        self.normalize_weights()
+        #self.normalize_weights()
         self.track_metrics()
         self.SHORTEST_PATH = dict(nx.shortest_path_length(self.G))
 
 # Parameters
-steps = 800
-n_agents = 250
-avg_degree = 25
+steps = 1000
+n_agents = 100
+avg_degree = 60
 prob = avg_degree / n_agents
 
 # not sure what this is for exactly
@@ -226,11 +224,17 @@ follow_threshold = 0.2
 unfollow_threshold = 0.1
 
 # how important either of these things is (this decides whom to have an interaction with)
-w_popularity = 0.5
-w_proximity = 1 - w_popularity
+w_popularity = 0.6
+w_proximity = 0.2
+w_similarity = 0.2
+k_graph = int(prob)
+p_graph = 0.5
+mu = 2.0  # Estimated average social distance for connections
+temp = 1.0  # Initial guess for temperature
+
 
 # Initialize and run the model
-model = SocialNetwork(n_agents, prob, concentration, follow_threshold, unfollow_threshold, w_popularity, w_proximity)
+model = SocialNetwork(n_agents, prob, concentration, follow_threshold, unfollow_threshold, w_popularity, w_proximity, w_similarity, mu, temp)
 
 for i in range(steps + 1):
     model.step()
