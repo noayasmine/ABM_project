@@ -84,15 +84,51 @@ class SocialNetwork():
             self.MAX[node] = r.choice(range(self.G.out_degree(node), n_agents))
         self.SHORTEST_PATH = dict(nx.shortest_path_length(self.G))
     
-    
-    def normalize_weights(self):
-        for follower in self.WEIGHT:
-            total_engagement = sum(self.WEIGHT[follower].values())
-            self.WEIGHT[follower] = {influencer : engagement / total_engagement for 
-                                          influencer, engagement in self.WEIGHT[follower].items()}
-        for follower in self.WEIGHT:
-            for influencer in self.WEIGHT[follower]:
-                self.UTILITIES[influencer][follower] = self.WEIGHT[follower][influencer]
+    def update_opinions_and_weights(self):
+        # conformity is the rate an agent changes their opinion to match their neighborhood
+        # we probably should make it a random parameter for each agent
+        # or a global parameter?
+        conformity = 0.1 
+        for node in self.G.nodes():
+            opinions = []
+            weights = []
+            for i in self.WEIGHT[node]:
+                if abs(self.OPINIONS[i] - self.OPINIONS[node]) > 0.15:
+                    continue
+                opinions.append(self.OPINIONS[i])
+                weights.append(self.WEIGHT[node][i])
+            if sum(weights) == 0:
+                consensus = np.mean(opinions)
+            else:
+                consensus = np.average(opinions, weights=weights)
+            old_opinion = self.OPINIONS[node]
+            new_opinion = old_opinion + conformity*(consensus - old_opinion)
+            self.OPINIONS[node] = np.clip(new_opinion, 0, 1)
+            # print(new_opinion)
+        
+            # update weights based on difference of opinion
+            for i in self.WEIGHT[node]:
+                new_weight = self.WEIGHT[node][i]
+                # new_weight = self.WEIGHT[node][i]*(old_opinion-self.OPINIONS[i])/(self.OPINIONS[node]-self.OPINIONS[i])
+                # weights between 0 and 1
+                min_weight = np.min(weights) if sum(weights) != 0 else 0
+                max_weight = np.max(weights) if sum(weights) != 0 else 1
+                self.WEIGHT[node][i] = (new_weight-min_weight)/(max_weight-min_weight)
+                # print(self.WEIGHT[node][i])
+
+    # def update_opinions_and_weights(self):
+    #     conformity = 0.1 
+    #     for node in self.G.nodes():
+    #         cur_opinion = self.OPINIONS[node]
+    #         for i in self.WEIGHT[node]:
+    #             other_opinion = self.OPINIONS[i]
+    #             weight = self.WEIGHT[node][i]
+    #             if r.random() < weight:
+    #                  cur_opinion = (1-conformity)*cur_opinion+conformity*other_opinion
+    #             else:
+    #                 cur_opinion = (1-conformity)*cur_opinion+conformity*(1-other_opinion)
+    #         self.OPINIONS[node] = np.clip(cur_opinion, 0, 1)
+    #         print()
 
     def utility_score(self, follower, followee):
         # normalize popularity by in_connections / total_connections
@@ -204,14 +240,15 @@ class SocialNetwork():
         for follower, exfollowee in edges_to_remove:
             self.remove_connection(follower, exfollowee)
 
+        self.update_opinions_and_weights()
         #self.normalize_weights()
         self.track_metrics()
         self.SHORTEST_PATH = dict(nx.shortest_path_length(self.G))
 
 # Parameters
-steps = 1000
+steps = 2000
 n_agents = 100
-avg_degree = 60
+avg_degree = 50
 prob = avg_degree / n_agents
 
 # not sure what this is for exactly
@@ -239,6 +276,7 @@ model = SocialNetwork(n_agents, prob, concentration, follow_threshold, unfollow_
 for i in range(steps + 1):
     model.step()
     print(f"\rProgress: {(i / steps) * 100:.2f}%", end='', flush=True)
+print(model.OPINIONS)
 
 # Save results to CSV
 df_results = pd.DataFrame(model.Data_Collector)
