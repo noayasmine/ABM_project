@@ -1,0 +1,5 @@
+Aleksander: Node has engagement value that its overall happiness with its network
+
+Rafael: change in how engagement is portraited, engagement value is within edge relating to how satisfied a follower is with an influencer. engagement is measure of attention: how many hours an agent spends on influencer (unbounded) OR attention is percentage based (i.e. 30% on influencer A, 50% on influencer B, etc)
+
+
