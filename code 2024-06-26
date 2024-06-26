@@ -1,0 +1,156 @@
+import networkx as nx
+import random
+import matplotlib.pyplot as plt
+
+def generate_network(n, k, p, p_sim, p_pop, p_dis):
+    # Generate a regular lattice (Watts-Strogatz graph with p=0)
+    G = nx.watts_strogatz_graph(n, k, 0)
+    
+    # Convert to a directed graph
+    DG = nx.DiGraph()
+    DG.add_edges_from((u, v) for u, v in G.edges())
+    DG.add_edges_from((v, u) for u, v in G.edges())
+    
+    all_edges = list(DG.edges())
+    
+    for u, v in all_edges:
+        if random.random() < p and u != v:
+            new_v = random.choice([x for x in DG.nodes() if x != v and not DG.has_edge(u, x)])
+            DG.remove_edge(u, v)
+            DG.add_edge(u, new_v)
+
+    for node in DG.nodes():
+        DG.nodes[node]['Op'] = round(random.random(), 3)
+        DG.nodes[node]['p_sim'] = p_sim
+        DG.nodes[node]['p_pop'] = p_pop
+        DG.nodes[node]['p_dis'] = p_dis
+
+    for u, v in DG.edges():
+        DG[u][v]['OpDis'] = abs(DG.nodes[u]['Op'] - DG.nodes[v]['Op'])
+
+    return DG
+
+def update_network(DG, steps):
+    connectivity_metrics = {
+        'step': [],
+        'average_clustering': [],
+        'average_shortest_path_length': [],
+        'density': [],
+        'in_degree_0': [],
+        'out_degree_0': []
+    }
+    
+    for step in range(steps):
+        connectivity_metrics['step'].append(step)
+        connectivity_metrics['average_clustering'].append(nx.average_clustering(DG))
+        try:
+            connectivity_metrics['average_shortest_path_length'].append(nx.average_shortest_path_length(DG))
+        except nx.NetworkXError:
+            connectivity_metrics['average_shortest_path_length'].append(float('inf'))
+        connectivity_metrics['density'].append(nx.density(DG))
+
+        in_degree_0_count = sum(1 for node in DG.nodes() if DG.in_degree(node) == 0)
+        out_degree_0_count = sum(1 for node in DG.nodes() if DG.out_degree(node) == 0)
+        
+        connectivity_metrics['in_degree_0'].append(in_degree_0_count)
+        connectivity_metrics['out_degree_0'].append(out_degree_0_count)
+
+        for u in DG.nodes():
+            if DG.out_degree(u) > 0:
+                shortest_paths = nx.shortest_path_length(DG, source=u)
+                reachable_nodes = {v: l for v, l in shortest_paths.items() if l > 1}
+
+                if reachable_nodes:
+                    total_weight = sum(1/l for l in reachable_nodes.values())
+                    probabilities = {v: (1/l)/total_weight for v, l in reachable_nodes.items()}
+                    v = random.choices(list(probabilities.keys()), weights=probabilities.values())[0]
+
+                    if u == v:
+                        continue
+
+                    p_sim = DG.nodes[u]['p_sim']
+                    p_pop = DG.nodes[u]['p_pop']
+                    p_dis = DG.nodes[u]['p_dis']
+
+                    max_in_degree = max(DG.in_degree(n) for n in DG.nodes())
+                    Op_u = DG.nodes[u]['Op']
+                    Op_v = DG.nodes[v]['Op']
+                    in_deg_v = DG.in_degree(v)
+
+                    prob_new_edge = min((p_sim * (1 - abs(Op_v - Op_u))) + 
+                                        (p_pop * (in_deg_v / max_in_degree)) + 
+                                        (p_dis * (1 / shortest_paths[v])), 1)
+
+                    if random.random() < prob_new_edge:
+                        DG.add_edge(u, v)
+                    
+                    new_shortest_paths = nx.shortest_path_length(DG, source=u)
+                    reachable_if_removed = {v: l for v, l in new_shortest_paths.items() if l > 1}
+
+                    unreachable_nodes = set(DG.nodes()) - set(reachable_if_removed.keys())
+
+                    if unreachable_nodes:
+                        v = random.choice(list(unreachable_nodes))
+                        Op_v = DG.nodes[v]['Op']
+                        in_deg_v = DG.in_degree(v)
+
+                        prob_remove_edge = min(((p_sim * abs(Op_v - Op_u)) + 
+                                                (p_pop * (1 - (in_deg_v / max_in_degree)))) / (p_sim + p_pop), 1)
+                    else:
+                        total_weight = sum(1/l for l in reachable_if_removed.values())
+                        probabilities = {v: (1/l)/total_weight for v, l in reachable_if_removed.items()}
+                        v = random.choices(list(probabilities.keys()), weights=probabilities.values())[0]
+
+                        if u == v:
+                            continue
+
+                        prob_remove_edge = min((p_sim * abs(Op_v - Op_u)) + 
+                                               (p_pop * (1 - (in_deg_v / max_in_degree))) + 
+                                               (p_dis * (1 - (1 / new_shortest_paths[v]))), 1)
+
+                    if DG.has_edge(u, v) and random.random() < prob_remove_edge:
+                        DG.remove_edge(u, v)
+
+    return connectivity_metrics
+
+n = 100  # Number of nodes
+k = 10   # Each node is connected to k nearest neighbors in ring topology
+p = 0.3  # Probability of rewiring each edge
+p_sim = 0.45
+p_pop = 0.45
+p_dis = 1 - min((p_sim + p_pop), 1)
+steps = 100
+
+DG = generate_network(n, k, p, p_sim, p_pop, p_dis)
+metrics = update_network(DG, steps)
+
+# Plotting the metrics
+plt.figure(figsize=(12, 16))
+
+plt.subplot(4, 1, 1)
+plt.plot(metrics['step'], metrics['average_clustering'], marker='o')
+plt.title('Average Clustering Coefficient Over Time')
+plt.xlabel('Step')
+plt.ylabel('Average Clustering Coefficient')
+
+plt.subplot(4, 1, 2)
+plt.plot(metrics['step'], metrics['average_shortest_path_length'], marker='o')
+plt.title('Average Shortest Path Length Over Time')
+plt.xlabel('Step')
+plt.ylabel('Average Shortest Path Length')
+
+plt.subplot(4, 1, 3)
+plt.plot(metrics['step'], metrics['density'], marker='o')
+plt.title('Density Over Time')
+plt.xlabel('Step')
+plt.ylabel('Density')
+
+plt.subplot(4, 1, 4)
+plt.plot(metrics['step'], metrics['in_degree_0'], marker='o', label='In-degree 0')
+plt.plot(metrics['step'], metrics['out_degree_0'], marker='x', label='Out-degree 0')
+plt.title('Number of Nodes with In-degree 0 and Out-degree 0 Over Time')
+plt.xlabel('Step')
+plt.ylabel('Number of Nodes')
+plt.legend()
+
+plt.tight_layout()
