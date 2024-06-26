@@ -63,7 +63,7 @@ class SocialNetwork():
         self.MAX = defaultdict(int)
         
         self.SHORTEST_PATH = defaultdict(int)
-        self.Data_Collector = {"avg utility": [], "avg IN degrees": [], "avg OUT degrees" : [], 
+        self.Data_Collector = {"max IN degrees": [], "avg IN degrees": [], "avg OUT degrees" : [], 
                                "avg clustering coeff" : []}
         self.create_random_network()
     
@@ -197,10 +197,11 @@ class SocialNetwork():
         avg_clustering_coeff = nx.average_clustering(self.G)
         avg_utility = sum(sum(inner_dict.values()) for inner_dict in self.UTILITIES.values()) / self.n_agents
 
+        self.Data_Collector["max IN degrees"].append(max(self.IN.values()))
         self.Data_Collector["avg IN degrees"].append(avg_in_degree)
         self.Data_Collector["avg OUT degrees"].append(avg_out_degree)
         self.Data_Collector["avg clustering coeff"].append(avg_clustering_coeff)
-        self.Data_Collector["avg utility"].append(avg_utility)
+        # self.Data_Collector["avg utility"].append(avg_utility)
 
     def step(self):
         edges_to_add = []
@@ -246,7 +247,7 @@ class SocialNetwork():
         self.SHORTEST_PATH = dict(nx.shortest_path_length(self.G))
 
 # Parameters
-steps = 2000
+steps = 550
 n_agents = 100
 avg_degree = 50
 prob = avg_degree / n_agents
@@ -276,6 +277,9 @@ model = SocialNetwork(n_agents, prob, concentration, follow_threshold, unfollow_
 for i in range(steps + 1):
     model.step()
     print(f"\rProgress: {(i / steps) * 100:.2f}%", end='', flush=True)
+
+end_opinions = pd.DataFrame({'Opinions': model.OPINIONS})
+end_opinions.to_csv("end_opinions.csv", index=False)
 print(model.OPINIONS)
 
 # Save results to CSV
@@ -303,24 +307,14 @@ axs[2].set_xlabel('Time Step')
 axs[2].set_ylabel('Clustering Coefficient')
 axs[2].legend()
 
-axs[3].plot(df_results.index, df_results["avg utility"], label='Average Utility', color='blue')
+axs[3].plot(df_results.index, df_results["max IN degrees"], label='Max In-Degree', color='blue')
 #axs[3].set_title('Average Utility over Time')
 axs[3].set_xlabel('Time Step')
-axs[3].set_ylabel('Utility')
+axs[3].set_ylabel('Max In-Degree')
 axs[3].legend()
 
 #plt.subplots_adjust(hspace=5.0)
 plt.tight_layout()
-plt.show()
-
-# Plot the distribution of utility values
-all_utilities = [utility for influencer in model.UTILITIES.values() for utility in influencer.values()]
-
-plt.figure(figsize=(10, 6))
-sns.histplot(all_utilities, kde=True, bins=30)
-plt.title('Distribution of Utility Values')
-plt.xlabel('Utility')
-plt.ylabel('Frequency')
 plt.show()
 
 
