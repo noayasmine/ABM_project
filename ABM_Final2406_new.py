@@ -102,7 +102,7 @@ class SocialNetwork():
                 opinions.append(self.OPINIONS[i])
                 weights.append(self.WEIGHT[node][i])
             if sum(weights) == 0:
-                consensus = np.mean(opinions)
+                consensus = 0.5
             else:
                 consensus = np.average(opinions, weights=weights)
             old_opinion = self.OPINIONS[node]
@@ -171,7 +171,16 @@ class SocialNetwork():
         agents = list(self.G.nodes())
         agents.remove(agent)  # Removing the agent itself from the list
    
-        distances = np.array([self.SHORTEST_PATH[agent][followee] for followee in agents])
+        distances = []
+        for followee in agents:
+            # We sometimes get a key error? DONT KNOW WHY
+            if followee in self.SHORTEST_PATH[agent]:
+                distances.append(self.SHORTEST_PATH[agent][followee])
+            else:
+                # have number of weights match the number of agents 
+                agents.remove(followee)
+            # distances.append(self.SHORTEST_PATH[agent][followee])
+        distances = np.array(distances)
         exponents = (distances / max(distances) - self.mu) / self.temperature
         probs = expit(-exponents)
    
