@@ -1,0 +1,377 @@
+#!/usr/bin/env python3
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+@author Francijn
+
+24/06 - in each time step; an agent has an encounter with someone.
+The choice with whom an agent has an encounter with is probabilistic:
+and based on popularity with weight p, and path length, with weight 1 - p.
+
+Then depending on whether this encountered agent is already being followed or not;
+the agent takes an action:
+    if not following yet:
+        if agents are similar (within the threshold decided per simulation):
+            follow
+        else
+            do nothing
+    if already following:
+        if engagement is lower than engagement threshold (also set per simulation):
+            unfollow
+        else
+            do nothing
+
+By changing the threshold values and the weights of the importance of popularity and pathlength in having an encounter
+we can see what values lead to network structures with highly popular individuals (influencers)
+NOT SURE YET WHAT EXACT RESEARCH QUESTION WOULD MAKE SENSE THOUGH
+"""
+
+import numpy as np
+import networkx as nx
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import random as r
+from collections import defaultdict
+from scipy.special import expit
+
+class SocialNetwork():
+    def __init__(self, n_agents, prob, concentration, w_pop, w_prox, w_sim, mu, temp):
+        self.n_agents = n_agents
+        self.prob = prob
+        self.concentration = concentration
+        self.w_pop = w_pop
+        self.w_prox = w_prox
+        self.w_sim = w_sim
+        self.prob = prob
+        self.mu = mu
+        self.temperature = temp
+
+        # {Node1 : IN_Degree, Node2 : IN_Degree}
+        self.IN = defaultdict(int)
+        # {Node1 : OUT_Degree, Node2 : OUT_Degree}
+        self.OUT = defaultdict(int)
+        # {Node1 : {Follower1 : Engagement, Follower2 : Engagement}, Node2 : ETC}
+        # for user engagement: self.WEIGHT[follower][influencer]
+        self.WEIGHT = defaultdict(lambda: defaultdict(float))
+        # for engagement received from follower: self.UTILITIES[influencer][follower]
+        # for total engagement: sum(self.UTILITIES[influencer].values())
+        self.UTILITIES = defaultdict(lambda: defaultdict(float))
+        self.OPINIONS = {i: r.uniform(0, 1) for i in range(n_agents)}
+        self.MAX = defaultdict(int)
+        
+        self.SHORTEST_PATH = defaultdict(int)
+        self.Data_Collector = {"max IN degrees": [], "avg IN degrees": [], "avg OUT degrees" : [], 
+                               "avg clustering coeff" : []}
+        self.create_random_network()
+    
+    def create_random_network(self):
+        self.G = nx.gnp_random_graph(n=self.n_agents, p=self.prob, directed=True)
+        #self.G = nx.watts_strogatz_graph(n=self.n_agents, k=self.k_graph, p=self.p_graph, seed=None)
+        # add weights to the edges
+        for node in self.G.nodes():
+            out_edges = list(self.G.out_edges(node))
+            if out_edges:
+                #engagements = np.random.dirichlet(np.full(len(out_edges), self.concentration))
+                engagements = np.random.uniform(0,1,len(out_edges))
+                for (u, v), engagement in zip(out_edges, engagements):
+                    self.WEIGHT[u][v] = engagement
+                    self.UTILITIES[v][u] = engagement
+                    self.OUT[u] += 1
+                    self.IN[v] += 1
+            self.MAX[node] = r.choice(range(self.G.out_degree(node), self.n_agents))
+        self.SHORTEST_PATH = dict(nx.shortest_path_length(self.G))
+    
+    def update_opinions_and_weights(self):
+        # conformity is the rate an agent changes their opinion to match their neighborhood
+        # we probably should make it a random parameter for each agent
+        # or a global parameter?
+        conformity = 0.1 
+        for node in self.G.nodes():
+            opinions = []
+            weights = []
+            for i in self.WEIGHT[node]:
+                if abs(self.OPINIONS[i] - self.OPINIONS[node]) > 0.15:
+                    continue
+                opinions.append(self.OPINIONS[i])
+                weights.append(self.WEIGHT[node][i])
+            if sum(weights) == 0:
+                consensus = np.mean(opinions)
+            else:
+                consensus = np.average(opinions, weights=weights)
+            old_opinion = self.OPINIONS[node]
+            new_opinion = old_opinion + conformity*(consensus - old_opinion)
+            self.OPINIONS[node] = np.clip(new_opinion, 0, 1)
+            # print(new_opinion)
+        
+            # update weights based on difference of opinion
+            for i in self.WEIGHT[node]:
+                new_weight = self.WEIGHT[node][i]
+                # new_weight = self.WEIGHT[node][i]*(old_opinion-self.OPINIONS[i])/(self.OPINIONS[node]-self.OPINIONS[i])
+                # weights between 0 and 1
+                min_weight = np.min(weights) if len(weights) != 0 else 0
+                max_weight = np.max(weights) if len(weights) != 0 else 1
+                if max_weight == 0:
+                    max_weight = 1
+                self.WEIGHT[node][i] = (new_weight-min_weight)/(max_weight-min_weight)
+                # print(self.WEIGHT[node][i])
+
+    # def update_opinions_and_weights(self):
+    #     conformity = 0.1 
+    #     for node in self.G.nodes():
+    #         cur_opinion = self.OPINIONS[node]
+    #         for i in self.WEIGHT[node]:
+    #             other_opinion = self.OPINIONS[i]
+    #             weight = self.WEIGHT[node][i]
+    #             if r.random() < weight:
+    #                  cur_opinion = (1-conformity)*cur_opinion+conformity*other_opinion
+    #             else:
+    #                 cur_opinion = (1-conformity)*cur_opinion+conformity*(1-other_opinion)
+    #         self.OPINIONS[node] = np.clip(cur_opinion, 0, 1)
+    #         print()
+
+    def utility_score(self, follower, followee):
+        # normalize popularity by in_connections / total_connections
+        U_popularity = self.IN[follower] / max(self.IN)
+        U_similarity = 1 - abs(self.OPINIONS[follower] - self.OPINIONS[followee])
+        # 1 / shortestpath, shortest_path is int >= 2
+        U_proximity = 1 - (self.SHORTEST_PATH[follower][followee] / max(self.SHORTEST_PATH[follower].values()))
+
+        U_total = (self.w_pop * U_popularity + 
+                   self.w_sim * U_similarity +
+                   self.w_prox * U_proximity)
+        
+        return U_total
+    
+    def decide_to_follow(self, follower, followee):
+        #if abs(self.OPINIONS[follower] - self.OPINIONS[followee]) <= follow_threshold:
+        if self.utility_score(follower,followee) >= np.random.uniform(0,1):
+            return True
+        else:
+            return False
+
+    def decide_to_unfollow(self, follower, followee):
+        if 1 - self.WEIGHT[follower][followee] <= np.random.uniform(0,1):
+            return True
+        else:
+            return False
+    
+    def have_encounter_with(self, agent):
+        """Use fermi-dirac"""
+        agents = list(self.G.nodes())
+        agents.remove(agent)  # Removing the agent itself from the list
+    
+        distances = np.array([self.SHORTEST_PATH[agent][followee] for followee in agents])
+        exponents = (distances / max(distances) - self.mu) / self.temperature
+        probs = expit(-exponents)
+    
+        total_prob = np.sum(probs)
+        if total_prob == 0:
+            norm_probs = np.zeros_like(probs)
+        else:
+            norm_probs = probs / total_prob
+
+        encounter = r.choices(agents, weights=norm_probs, k=1)
+        return encounter[0]
+    
+    def add_connection(self, follower, followee):
+        if not self.G.has_edge(follower, followee):
+            self.G.add_edge(follower, followee)
+            engagement = r.uniform(0, 1)
+            self.WEIGHT[follower][followee] = engagement
+            self.UTILITIES[followee][follower] = engagement
+            self.OUT[follower] += 1
+            self.IN[followee] += 1
+
+    def remove_connection(self, follower, followee):
+        if self.G.has_edge(follower, followee):
+            self.G.remove_edge(follower, followee)
+            del self.WEIGHT[follower][followee]
+            del self.UTILITIES[followee][follower]
+            self.OUT[follower] -= 1
+            self.IN[followee] -= 1
+
+    def track_metrics(self):
+        avg_in_degree = sum(self.IN.values()) / self.n_agents
+        avg_out_degree = sum(self.OUT.values()) / self.n_agents
+        avg_clustering_coeff = nx.average_clustering(self.G)
+        avg_utility = sum(sum(inner_dict.values()) for inner_dict in self.UTILITIES.values()) / self.n_agents
+
+        self.Data_Collector["max IN degrees"].append(max(self.IN.values()))
+        self.Data_Collector["avg IN degrees"].append(avg_in_degree)
+        self.Data_Collector["avg OUT degrees"].append(avg_out_degree)
+        self.Data_Collector["avg clustering coeff"].append(avg_clustering_coeff)
+        # self.Data_Collector["avg utility"].append(avg_utility)
+
+    def step(self):
+        edges_to_add = []
+        edges_to_remove = []
+
+        for node in self.G.nodes():
+            # if you are already at the max of your following number; 
+            # unfollow someone (with whom you have low engagement)
+            #if self.G.out_degree(node) >= self.MAX[node]:
+                #lowest_utility_candidate = self.lowest_utility_candidates(node)
+                #if lowest_utility_candidate is not None:
+                    #edges_to_remove.append((node, lowest_utility_candidate))
+            
+                # choose an agent based (higher probability to be picked depending on
+                # path length and popularity)
+                
+            encountered = self.have_encounter_with(node)
+            # in this case the agent does not follow the potential followee yet
+            
+            if self.SHORTEST_PATH[node][encountered] > 1:
+            # if the agent does not follow the person yet; 
+            # decide if you want to follow (based on opinion similarity)
+                    if self.decide_to_follow(node, encountered):
+                        edges_to_add.append((node, encountered))
+                        
+            # if the agent does already follow, check if you want to keep following
+            # based on engagement
+            elif self.SHORTEST_PATH[node][encountered] == 1:
+                if self.decide_to_unfollow(node, encountered):
+                    edges_to_remove.append((node, encountered))
+                    
+        # for computational reasons first all agents do an action
+        # after that the actual network is changed
+        for follower, followee in edges_to_add:
+            self.add_connection(follower, followee)
+
+        for follower, exfollowee in edges_to_remove:
+            self.remove_connection(follower, exfollowee)
+
+        self.update_opinions_and_weights()
+        #self.normalize_weights()
+        self.track_metrics()
+        self.SHORTEST_PATH = dict(nx.shortest_path_length(self.G))
+"""
+# Parameters
+steps = 550
+n_agents = 100
+avg_degree = 50
+prob = avg_degree / n_agents
+
+# not sure what this is for exactly
+concentration = 2.5
+
+# how close an opinion has to be to another agents opinion to decide to follow them
+# follow_threshold = 0.2
+
+# # if engagement is lower than this threshold, the decision is made to unfollow
+# unfollow_threshold = 0.1
+
+# how important either of these things is (this decides whom to have an interaction with)
+w_popularity = 0.6
+w_proximity = 0.2
+w_similarity = 0.2
+k_graph = int(prob)
+p_graph = 0.5
+mu = 2.0  # Estimated average social distance for connections
+temp = 1.0  # Initial guess for temperature
+
+
+# Initialize and run the model
+model = SocialNetwork(n_agents, prob, concentration, w_popularity, w_proximity, w_similarity, mu, temp)
+
+
+for i in range(steps + 1):
+    model.step()
+    print(f"\rProgress: {(i / steps) * 100:.2f}%", end='', flush=True)
+
+end_opinions = pd.DataFrame({'Opinions': model.OPINIONS})
+end_opinions.to_csv("end_opinions.csv", index=False)
+print(model.OPINIONS)
+
+# Save results to CSV
+df_results = pd.DataFrame(model.Data_Collector)
+df_results.to_csv("social_network_metrics.csv", index=False)
+
+# Plotting metrics
+fig, axs = plt.subplots(4, 1, figsize=(5, 20))
+
+axs[0].plot(df_results.index, df_results["avg OUT degrees"], label='Average Out-Degree')
+#axs[0].set_title('Average Out-Degree over Time')
+axs[0].set_xlabel('Time Step')
+axs[0].set_ylabel('Average Out-Degree')
+axs[0].legend()
+
+axs[1].plot(df_results.index, df_results["avg IN degrees"], label='Average In-Degree', color='orange')
+#axs[1].set_title('Average In-Degree over Time')
+axs[1].set_xlabel('Time Step')
+axs[1].set_ylabel('Average In-Degree')
+axs[1].legend()
+
+axs[2].plot(df_results.index, df_results["avg clustering coeff"], label='Average Clustering Coefficient', color='green')
+#axs[2].set_title('Average Clustering Coefficient over Time')
+axs[2].set_xlabel('Time Step')
+axs[2].set_ylabel('Clustering Coefficient')
+axs[2].legend()
+
+axs[3].plot(df_results.index, df_results["max IN degrees"], label='Max In-Degree', color='blue')
+#axs[3].set_title('Average Utility over Time')
+axs[3].set_xlabel('Time Step')
+axs[3].set_ylabel('Max In-Degree')
+axs[3].legend()
+
+#plt.subplots_adjust(hspace=5.0)
+plt.tight_layout()
+plt.show()
+
+
+
+# Plot the network itself
+def plot_network(G, WEIGHT):
+    plt.figure(figsize=(12, 12))
+    pos = nx.spring_layout(G)  # positions for all nodes
+
+    # Draw nodes
+    nx.draw(G, pos, with_labels=True, node_size=500, node_color="skyblue", 
+            node_shape="o", alpha=0.75, linewidths=4)
+
+    # Draw edges
+    nx.draw_networkx_edges(G, pos)
+
+    # Create edge labels using weights from the WEIGHT attribute
+    edge_labels = {(u, v): f"{WEIGHT[u][v]:.2f}" for u, v in G.edges()}
+    
+    # Draw edge labels
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+
+    plt.title("Social Network Graph")
+    plt.show()
+
+# Check if the network is fully connected
+def check_network_connectivity(G):
+    if nx.is_strongly_connected(G):
+        print("The network is strongly connected: there is a path from every node to every other node.")
+    else:
+        print("The network is not strongly connected.")
+
+# Plot the distribution of connections per agent
+def plot_degree_distribution(G):
+    in_degrees = [G.in_degree(n) for n in G.nodes()]
+    out_degrees = [G.out_degree(n) for n in G.nodes()]
+    
+    plt.figure(figsize=(14, 6))
+    plt.subplot(1, 2, 1)
+    sns.histplot(in_degrees, bins=100, kde=False)
+    plt.title('In-Degree Distribution')
+    plt.xlabel('In-Degree')
+    plt.ylabel('Count')
+    
+    plt.subplot(1, 2, 2)
+    sns.histplot(out_degrees, bins=100, kde=False)
+    plt.title('Out-Degree Distribution')
+    plt.xlabel('Out-Degree')
+    plt.ylabel('Count')
+    
+    plt.tight_layout()
+    plt.show()
+
+# Use the functions
+# Use the function with the modified edge labels
+#plot_network(model.G, model.WEIGHT)
+#check_network_connectivity(model.G)
+plot_degree_distribution(model.G)
+"""
