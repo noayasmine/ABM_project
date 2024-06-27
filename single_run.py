@@ -1,14 +1,17 @@
 from ABM_Final_Final import SocialNetwork
 import pandas as pd
 import matplotlib.pyplot as plt
+import networkx as nx
+import seaborn as sns
+
 """"
 File to do a single run of the model. 
 First initialize parameters, then it runs the model and show some data.
 """
 # Parameters
-steps = 550
+steps = 1000
 n_agents = 100
-avg_degree = 50
+avg_degree = 15
 prob = avg_degree / n_agents
 
 
@@ -29,31 +32,30 @@ for i in range(steps + 1):
     print(f"\rProgress: {(i / steps) * 100:.2f}%", end='', flush=True)
 
 
-end_opinions = pd.DataFrame({'Opinions': model.OPINIONS})
-end_opinions.to_csv("end_opinions.csv", index=False)
-print(model.OPINIONS)
-
+#end_opinions = pd.DataFrame({'Opinions': model.OPINIONS})
+#end_opinions.to_csv("end_opinions.csv", index=False)
 
 # Save results to CSV
 df_results = pd.DataFrame(model.Data_Collector)
-df_results.to_csv("social_network_metrics.csv", index=False)
+#df_results.to_csv("social_network_metrics.csv", index=False)
 
 
 # Plotting metrics
 fig, axs = plt.subplots(4, 1, figsize=(5, 20))
 
-
-axs[0].plot(df_results.index, df_results["avg OUT degrees"], label='Average Out-Degree')
+# TODO I don't know what the best way to plot this is yet
+b_centrality = list(df_results["betweenness centrality"][1000].values())
+axs[0].scatter(range(n_agents), b_centrality, label='betweenness centrality time step 1000')
 #axs[0].set_title('Average Out-Degree over Time')
 axs[0].set_xlabel('Time Step')
-axs[0].set_ylabel('Average Out-Degree')
+axs[0].set_ylabel('betweenness centrality')
 axs[0].legend()
 
 
-axs[1].plot(df_results.index, df_results["avg IN degrees"], label='Average In-Degree', color='orange')
+axs[1].plot(df_results.index, df_results["avg degrees"], label='Average Degree', color='orange')
 #axs[1].set_title('Average In-Degree over Time')
 axs[1].set_xlabel('Time Step')
-axs[1].set_ylabel('Average In-Degree')
+axs[1].set_ylabel('Average Degree')
 axs[1].legend()
 
 
@@ -74,11 +76,6 @@ axs[3].legend()
 #plt.subplots_adjust(hspace=5.0)
 plt.tight_layout()
 plt.show()
-
-
-
-
-
 
 # Plot the network itself
 def plot_network(G, WEIGHT):
@@ -140,5 +137,4 @@ def plot_degree_distribution(G):
 # Use the function with the modified edge labels
 #plot_network(model.G, model.WEIGHT)
 #check_network_connectivity(model.G)
-plot_degree_distribution(model.G)
-"""
+#plot_degree_distribution(model.G)

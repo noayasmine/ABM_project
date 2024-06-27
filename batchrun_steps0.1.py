@@ -1,5 +1,5 @@
 import itertools
-from ABM_Final2406_new import SocialNetwork
+from ABM_Final_Final import SocialNetwork
 import pandas as pd
 
 
@@ -20,15 +20,11 @@ for a in range(0, 11):  # This corresponds to 0 to 1 in steps of 0.1
 # so now we have all the combinations we want
 
 
-# All the other parameters stay the same
+# All the other parameters stay the same for all the runs
 steps = 550
 n_agents = 50
 avg_degree = 50
 prob = avg_degree / n_agents
-
-
-# not sure what this is for exactly
-concentration = 2.5
 
 
 # how important either of these things is (this decides whom to have an interaction with)
@@ -44,7 +40,7 @@ for i in range(len(combinations)):
     w_proximity = combinations[i][1]
     w_similarity = combinations[i][2]
    
-    model = SocialNetwork(n_agents, prob, concentration, w_popularity, w_proximity, w_similarity, mu, temp)
+    model = SocialNetwork(n_agents, prob, w_popularity, w_proximity, w_similarity, mu, temp)
     for j in range(steps + 1):
         model.step()
         print(f"\rProgress: {(j / steps) * 100:.2f}%", end='', flush=True)

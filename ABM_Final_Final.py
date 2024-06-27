@@ -26,12 +26,8 @@ the agent takes an action:
 
 """
 
-
 import numpy as np
 import networkx as nx
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 import random as r
 from collections import defaultdict
 from scipy.special import expit
@@ -62,13 +58,12 @@ class SocialNetwork():
         self.MAX = defaultdict(int)
        
         self.SHORTEST_PATH = defaultdict(int)
-        self.Data_Collector = {"max IN degrees": [], "avg IN degrees": [], "avg OUT degrees" : [],
-                               "avg clustering coeff" : []}
+        self.Data_Collector = {"max IN degrees": [], "avg degrees": [],
+                               "avg clustering coeff" : [], "betweenness centrality" : []}
         self.create_random_network()
    
     def create_random_network(self):
         self.G = nx.gnp_random_graph(n=self.n_agents, p=self.prob, directed=True)
-        #self.G = nx.watts_strogatz_graph(n=self.n_agents, k=self.k_graph, p=self.p_graph, seed=None)
         # add weights to the edges
         for node in self.G.nodes():
             out_edges = list(self.G.out_edges(node))
@@ -102,36 +97,21 @@ class SocialNetwork():
             old_opinion = self.OPINIONS[node]
             new_opinion = old_opinion + conformity*(consensus - old_opinion)
             self.OPINIONS[node] = np.clip(new_opinion, 0, 1)
-            # print(new_opinion)
        
             # update weights based on difference of opinion
             for i in self.WEIGHT[node]:
                 new_weight = self.WEIGHT[node][i]
-                # new_weight = self.WEIGHT[node][i]*(old_opinion-self.OPINIONS[i])/(self.OPINIONS[node]-self.OPINIONS[i])
                 # weights between 0 and 1
                 min_weight = np.min(weights) if len(weights) != 0 else 0
                 max_weight = np.max(weights) if len(weights) != 0 else 1
-                if max_weight == 0 or np.isnan(max_weight) or np.isnan(min_weight):
+                if max_weight == 0:
                     max_weight = 1
                     min_weight = 0
-                self.WEIGHT[node][i] = (new_weight-min_weight+0.001)/(max_weight-min_weight+0.001)
-                # print(self.WEIGHT[node][i])
-
-
-    # def update_opinions_and_weights(self):
-    #     conformity = 0.1
-    #     for node in self.G.nodes():
-    #         cur_opinion = self.OPINIONS[node]
-    #         for i in self.WEIGHT[node]:
-    #             other_opinion = self.OPINIONS[i]
-    #             weight = self.WEIGHT[node][i]
-    #             if r.random() < weight:
-    #                  cur_opinion = (1-conformity)*cur_opinion+conformity*other_opinion
-    #             else:
-    #                 cur_opinion = (1-conformity)*cur_opinion+conformity*(1-other_opinion)
-    #         self.OPINIONS[node] = np.clip(cur_opinion, 0, 1)
-    #         print()
-
+                # otherwise it threw some errors when the average degree was low by initializing
+                if max_weight - min_weight == 0:
+                    continue
+                else:
+                    self.WEIGHT[node][i] = (new_weight-min_weight+0.001)/(max_weight-min_weight+0.001)
 
     def utility_score(self, follower, followee):
         # normalize popularity by in_connections / total_connections
@@ -148,7 +128,6 @@ class SocialNetwork():
         return U_total
    
     def decide_to_follow(self, follower, followee):
-        #if abs(self.OPINIONS[follower] - self.OPINIONS[followee]) <= follow_threshold:
         if self.utility_score(follower,followee) >= np.random.uniform(0,1):
             return True
         else:
@@ -211,35 +190,23 @@ class SocialNetwork():
 
 
     def track_metrics(self):
-        avg_in_degree = sum(self.IN.values()) / self.n_agents
-        avg_out_degree = sum(self.OUT.values()) / self.n_agents
+        avg_degree = sum(nx.average_degree_connectivity(self.G).values())/self.n_agents
         avg_clustering_coeff = nx.average_clustering(self.G)
-        avg_utility = sum(sum(inner_dict.values()) for inner_dict in self.UTILITIES.values()) / self.n_agents
-
-
+        centrality = nx.betweenness_centrality(self.G)
+        
         self.Data_Collector["max IN degrees"].append(max(self.IN.values()))
-        self.Data_Collector["avg IN degrees"].append(avg_in_degree)
-        self.Data_Collector["avg OUT degrees"].append(avg_out_degree)
+        self.Data_Collector["avg degrees"].append(avg_degree)
         self.Data_Collector["avg clustering coeff"].append(avg_clustering_coeff)
-        # self.Data_Collector["avg utility"].append(avg_utility)
+        self.Data_Collector["betweenness centrality"].append(centrality)
 
 
     def step(self):
+        # initialize list to keep track how the network should change
         edges_to_add = []
         edges_to_remove = []
 
-
         for node in self.G.nodes():
-            # if you are already at the max of your following number;
-            # unfollow someone (with whom you have low engagement)
-            #if self.G.out_degree(node) >= self.MAX[node]:
-                #lowest_utility_candidate = self.lowest_utility_candidates(node)
-                #if lowest_utility_candidate is not None:
-                    #edges_to_remove.append((node, lowest_utility_candidate))
-           
-                # choose an agent based (higher probability to be picked depending on
-                # path length and popularity)
-               
+
             encountered = self.have_encounter_with(node)
             if not encountered:
                 continue
@@ -268,7 +235,6 @@ class SocialNetwork():
 
 
         self.update_opinions_and_weights()
-        #self.normalize_weights()
         self.track_metrics()
         self.SHORTEST_PATH = dict(nx.shortest_path_length(self.G))
 
