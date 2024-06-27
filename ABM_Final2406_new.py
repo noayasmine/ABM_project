@@ -52,7 +52,6 @@ class SocialNetwork():
         self.mu = mu
         self.temperature = temp
 
-
         # {Node1 : IN_Degree, Node2 : IN_Degree}
         self.IN = defaultdict(int)
         # {Node1 : OUT_Degree, Node2 : OUT_Degree}
@@ -117,9 +116,10 @@ class SocialNetwork():
                 # weights between 0 and 1
                 min_weight = np.min(weights) if len(weights) != 0 else 0
                 max_weight = np.max(weights) if len(weights) != 0 else 1
-                if max_weight == 0:
+                if max_weight == 0 or np.isnan(max_weight) or np.isnan(min_weight):
                     max_weight = 1
-                self.WEIGHT[node][i] = (new_weight-min_weight)/(max_weight-min_weight)
+                    min_weight = 0
+                self.WEIGHT[node][i] = (new_weight-min_weight+0.001)/(max_weight-min_weight+0.001)
                 # print(self.WEIGHT[node][i])
 
 
@@ -181,6 +181,8 @@ class SocialNetwork():
                 agents.remove(followee)
             # distances.append(self.SHORTEST_PATH[agent][followee])
         distances = np.array(distances)
+        if len(distances) == 0:
+            return
         exponents = (distances / max(distances) - self.mu) / self.temperature
         probs = expit(-exponents)
    
@@ -244,6 +246,8 @@ class SocialNetwork():
                 # path length and popularity)
                
             encountered = self.have_encounter_with(node)
+            if not encountered:
+                continue
             # in this case the agent does not follow the potential followee yet
            
             if self.SHORTEST_PATH[node][encountered] > 1:
