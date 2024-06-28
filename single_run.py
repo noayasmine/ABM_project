@@ -9,9 +9,9 @@ File to do a single run of the model.
 First initialize parameters, then it runs the model and show some data.
 """
 # Parameters
-steps = 1000
-n_agents = 100
-avg_degree = 15
+steps = 1250
+n_agents = 75
+avg_degree = 25
 prob = avg_degree / n_agents
 
 
@@ -44,8 +44,8 @@ df_results = pd.DataFrame(model.Data_Collector)
 fig, axs = plt.subplots(4, 1, figsize=(5, 20))
 
 # TODO I don't know what the best way to plot this is yet
-b_centrality = list(df_results["betweenness centrality"][1000].values())
-axs[0].scatter(range(n_agents), b_centrality, label='betweenness centrality time step 1000')
+b_centrality = list(df_results["betweenness centrality"][100].values())
+axs[0].plot(range(len(b_centrality)), b_centrality, "bo", label='betweenness centrality time step 1000')
 #axs[0].set_title('Average Out-Degree over Time')
 axs[0].set_xlabel('Time Step')
 axs[0].set_ylabel('betweenness centrality')

@@ -147,7 +147,6 @@ class SocialNetwork():
    
         distances = []
         for followee in agents:
-            # We sometimes get a key error? DONT KNOW WHY
             if followee in self.SHORTEST_PATH[agent]:
                 distances.append(self.SHORTEST_PATH[agent][followee])
             else:

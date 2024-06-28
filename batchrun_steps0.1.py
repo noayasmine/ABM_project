@@ -21,9 +21,9 @@ for a in range(0, 11):  # This corresponds to 0 to 1 in steps of 0.1
 
 
 # All the other parameters stay the same for all the runs
-steps = 550
-n_agents = 50
-avg_degree = 50
+steps = 1250
+n_agents = 75
+avg_degree = 25
 prob = avg_degree / n_agents
 
 
@@ -33,17 +33,18 @@ p_graph = 0.5
 mu = 2.0  # Estimated average social distance for connections
 temp = 1.0  # Initial guess for temperature
 
+# since in the end we want to take the average of
 
 for i in range(len(combinations)):
     print(i)
     w_popularity = combinations[i][0]
     w_proximity = combinations[i][1]
     w_similarity = combinations[i][2]
-   
+
     model = SocialNetwork(n_agents, prob, w_popularity, w_proximity, w_similarity, mu, temp)
-    for j in range(steps + 1):
+    for k in range(steps + 1):
         model.step()
-        print(f"\rProgress: {(j / steps) * 100:.2f}%", end='', flush=True)
+        print(f"\rProgress: {(k / steps) * 100:.2f}%", end='', flush=True)
 
 
     # Save results to CSV
@@ -51,13 +52,13 @@ for i in range(len(combinations)):
     w_pop_list = [w_popularity] * (steps + 1)
     w_prox_list = [w_proximity] * (steps + 1)
     w_sim_list = [w_similarity] * (steps + 1)
-    runs = [i] * (steps + 1)
-    df_results.insert(0, "run", runs)
+    run = [4] * (steps + 1)
+    df_results.insert(0, "run", run)
     df_results.insert(0, "w_pop", w_pop_list)
     df_results.insert(0, "w_prox", w_prox_list)
     df_results.insert(0, "w_sim", w_sim_list)
-    df_results.to_csv(f"{i}_pop{w_popularity}prox{w_proximity}sim{w_similarity}_moresteps.csv", index=False)
+    df_results.to_csv(f"{4}_pop{w_popularity}prox{w_proximity}sim{w_similarity}_moresteps.csv", index=False)
 
 
     end_opinions = pd.DataFrame({'Opinions': model.OPINIONS})
-    end_opinions.to_csv(f"{i}_opinions.csv", index=False)
+    end_opinions.to_csv(f"{4}_opinions.csv", index=False)
