@@ -4,7 +4,7 @@ import pandas as pd
 
 
 # Define the possible values
-values = [0, 0.25, 0.5, 0.75, 1]
+values = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
 
 
 # Generate all possible combinations of a, b, c
@@ -21,8 +21,8 @@ for a, b, c in itertools.product(values, repeat=3):
 
 # All the other parameters stay the same
 steps = 550
-n_agents = 100
-avg_degree = 50
+n_agents = 60
+avg_degree = 30
 prob = avg_degree / n_agents
 
 
