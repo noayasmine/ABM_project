@@ -34,7 +34,7 @@ from scipy.special import expit
 
 
 class SocialNetwork():
-    def __init__(self, n_agents, prob, w_pop, w_prox, w_sim, mu, temp):
+    def __init__(self, n_agents, prob, w_pop, w_prox, w_sim, mu, temp, conf_mu=0.1, tol_mu=0.15):
         self.n_agents = n_agents
         self.prob = prob
         self.w_pop = w_pop
@@ -56,7 +56,10 @@ class SocialNetwork():
         self.UTILITIES = defaultdict(lambda: defaultdict(float))
         self.OPINIONS = {i: r.uniform(0, 1) for i in range(n_agents)}
         self.MAX = defaultdict(int)
-       
+
+        self.CONFORMITY = {i: np.random.exponential(1/3)/10+conf_mu for i in range(n_agents)}
+        self.TOLERANCE = {i: np.random.exponential(1/3)/10+tol_mu for i in range(n_agents)}
+
         self.SHORTEST_PATH = defaultdict(int)
         self.Data_Collector = {"max IN degrees": [], "avg degrees": [],
                                "avg clustering coeff" : [], "betweenness centrality" : []}
@@ -81,12 +84,14 @@ class SocialNetwork():
         # conformity is the rate an agent changes their opinion to match their neighborhood
         # we probably should make it a random parameter for each agent
         # or a global parameter?
-        conformity = 0.1
+        # conformity = 0.1
         for node in self.G.nodes():
+            conformity = self.CONFORMITY[node]
+            tolerance = self.TOLERANCE[node]
             opinions = []
             weights = []
             for i in self.WEIGHT[node]:
-                if abs(self.OPINIONS[i] - self.OPINIONS[node]) > 0.15:
+                if abs(self.OPINIONS[i] - self.OPINIONS[node]) > tolerance:
                     continue
                 opinions.append(self.OPINIONS[i])
                 weights.append(self.WEIGHT[node][i])
