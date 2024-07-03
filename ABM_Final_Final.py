@@ -34,7 +34,7 @@ from scipy.special import expit
 
 
 class SocialNetwork():
-    def __init__(self, n_agents, prob, w_pop, w_prox, w_sim, mu, temp):
+    def __init__(self, n_agents, prob, w_pop, w_prox, w_sim, mu, temp, conf_mu=0.1, tol_mu=0.15):
         self.n_agents = n_agents
         self.prob = prob
         self.w_pop = w_pop
@@ -56,10 +56,17 @@ class SocialNetwork():
         self.UTILITIES = defaultdict(lambda: defaultdict(float))
         self.OPINIONS = {i: r.uniform(0, 1) for i in range(n_agents)}
         self.MAX = defaultdict(int)
-       
+
+        self.CONFORMITY = {i: np.random.exponential(1/3)/10+conf_mu for i in range(n_agents)}
+        self.TOLERANCE = {i: np.random.exponential(1/3)/10+tol_mu for i in range(n_agents)}
+
+        # print(self.CONFORMITY)
+        # print(self.TOLERANCE)
+
         self.SHORTEST_PATH = defaultdict(int)
         self.Data_Collector = {"max IN degrees": [], "avg degrees": [],
-                               "avg clustering coeff" : [], "betweenness centrality" : []}
+                               "avg clustering coeff" : [], "betweenness centrality" : [], 
+                               "degree sequence": []}
         self.create_random_network()
    
     def create_random_network(self):
@@ -81,12 +88,14 @@ class SocialNetwork():
         # conformity is the rate an agent changes their opinion to match their neighborhood
         # we probably should make it a random parameter for each agent
         # or a global parameter?
-        conformity = 0.1
+        # conformity = 0.1
         for node in self.G.nodes():
+            conformity = self.CONFORMITY[node]
+            tolerance = self.TOLERANCE[node]
             opinions = []
             weights = []
             for i in self.WEIGHT[node]:
-                if abs(self.OPINIONS[i] - self.OPINIONS[node]) > 0.15:
+                if abs(self.OPINIONS[i] - self.OPINIONS[node]) > tolerance:
                     continue
                 opinions.append(self.OPINIONS[i])
                 weights.append(self.WEIGHT[node][i])
@@ -115,7 +124,7 @@ class SocialNetwork():
 
     def utility_score(self, follower, followee):
         # normalize popularity by in_connections / total_connections
-        U_popularity = self.IN[follower] / max(self.IN)
+        U_popularity = self.IN[followee] / max(self.IN)
         U_similarity = 1 - abs(self.OPINIONS[follower] - self.OPINIONS[followee])
         # 1 / shortestpath, shortest_path is int >= 2
         U_proximity = 1 - (self.SHORTEST_PATH[follower][followee] / max(self.SHORTEST_PATH[follower].values()))
@@ -146,8 +155,10 @@ class SocialNetwork():
         agents.remove(agent)  # Removing the agent itself from the list
    
         distances = []
-        for followee in agents:
-            if followee in self.SHORTEST_PATH[agent]:
+        for followee in self.G.nodes():
+            if followee == agent:
+                continue
+            elif followee in self.SHORTEST_PATH[agent]:
                 distances.append(self.SHORTEST_PATH[agent][followee])
             else:
                 # have number of weights match the number of agents 
@@ -192,11 +203,13 @@ class SocialNetwork():
         avg_degree = sum(nx.average_degree_connectivity(self.G).values())/self.n_agents
         avg_clustering_coeff = nx.average_clustering(self.G)
         centrality = nx.betweenness_centrality(self.G)
+        degree_sequence = sorted([d for n, d in self.G.degree()], reverse=True)
         
         self.Data_Collector["max IN degrees"].append(max(self.IN.values()))
         self.Data_Collector["avg degrees"].append(avg_degree)
         self.Data_Collector["avg clustering coeff"].append(avg_clustering_coeff)
         self.Data_Collector["betweenness centrality"].append(centrality)
+        self.Data_Collector["degree sequence"].append(degree_sequence)
 
 
     def step(self):
