@@ -3,13 +3,18 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import networkx as nx
 import seaborn as sns
+import numpy as np
+from scipy.optimize import curve_fit
+
+# import powerlaw
+
 
 """"
 File to do a single run of the model. 
 First initialize parameters, then it runs the model and show some data.
 """
 # Parameters
-steps = 1250
+steps = 800
 n_agents = 75
 avg_degree = 25
 prob = avg_degree / n_agents
@@ -44,10 +49,10 @@ df_results = pd.DataFrame(model.Data_Collector)
 fig, axs = plt.subplots(4, 1, figsize=(5, 20))
 
 # TODO I don't know what the best way to plot this is yet
-b_centrality = list(df_results["betweenness centrality"][100].values())
-axs[0].plot(range(len(b_centrality)), b_centrality, "bo", label='betweenness centrality time step 1000')
+b_centrality = list(df_results["betweenness centrality"][steps-1].values())
+axs[0].plot(range(len(b_centrality)), b_centrality, "bo", label=f'betweenness centrality time step {steps}')
 #axs[0].set_title('Average Out-Degree over Time')
-axs[0].set_xlabel('Time Step')
+axs[0].set_xlabel('Agent')
 axs[0].set_ylabel('betweenness centrality')
 axs[0].legend()
 
@@ -65,6 +70,35 @@ axs[2].set_xlabel('Time Step')
 axs[2].set_ylabel('Clustering Coefficient')
 axs[2].legend()
 
+
+# # Function to fit power law
+# def power_law(x, a, b):
+#     return a * np.power(x, -b)
+
+# # Get the degree sequence
+# degree_sequence = list(df_results['degree sequence'][steps-1])
+# degree_count = np.bincount(degree_sequence)
+# degree = np.nonzero(degree_count)[0]
+# count = degree_count[degree]
+
+# degree_nonzero = degree[degree > 0]
+# count_nonzero = count[degree > 0]
+# popt, pcov = curve_fit(power_law, degree_nonzero, count_nonzero)
+# x = np.linspace(min(degree_nonzero), max(degree_nonzero), 100)
+# axs[3].plot(x, power_law(x, *popt))
+# axs[3].scatter(degree, count, label='Degree Distribution')
+# axs[3].set_xscale('log')
+# axs[3].set_yscale('log')
+# axs[3].set_xlabel('Degree')
+# axs[3].set_ylabel('Frequency')
+# axs[3].legend()
+
+# degree_sequence = list(df_results['degree sequence'][steps-1])
+# fit = powerlaw.Fit(degree_sequence, xmin=1) 
+
+# axs[3] = fit.plot_pdf(color='b', linewidth=2)
+# fit.power_law.plot_pdf(color='g', linestyle='--', ax=axs[3])
+# axs[3].plot(range(len(degree_sequence)), degree_sequence)
 
 axs[3].plot(df_results.index, df_results["max IN degrees"], label='Max In-Degree', color='blue')
 #axs[3].set_title('Average Utility over Time')
@@ -90,7 +124,6 @@ def plot_network(G, WEIGHT):
 
     # Draw edges
     nx.draw_networkx_edges(G, pos)
-
 
     # Create edge labels using weights from the WEIGHT attribute
     edge_labels = {(u, v): f"{WEIGHT[u][v]:.2f}" for u, v in G.edges()}

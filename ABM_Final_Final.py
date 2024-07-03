@@ -60,9 +60,13 @@ class SocialNetwork():
         self.CONFORMITY = {i: np.random.exponential(1/3)/10+conf_mu for i in range(n_agents)}
         self.TOLERANCE = {i: np.random.exponential(1/3)/10+tol_mu for i in range(n_agents)}
 
+        # print(self.CONFORMITY)
+        # print(self.TOLERANCE)
+
         self.SHORTEST_PATH = defaultdict(int)
         self.Data_Collector = {"max IN degrees": [], "avg degrees": [],
-                               "avg clustering coeff" : [], "betweenness centrality" : []}
+                               "avg clustering coeff" : [], "betweenness centrality" : [], 
+                               "degree sequence": []}
         self.create_random_network()
    
     def create_random_network(self):
@@ -151,8 +155,10 @@ class SocialNetwork():
         agents.remove(agent)  # Removing the agent itself from the list
    
         distances = []
-        for followee in agents:
-            if followee in self.SHORTEST_PATH[agent]:
+        for followee in self.G.nodes():
+            if followee == agent:
+                continue
+            elif followee in self.SHORTEST_PATH[agent]:
                 distances.append(self.SHORTEST_PATH[agent][followee])
             else:
                 # have number of weights match the number of agents 
@@ -197,11 +203,13 @@ class SocialNetwork():
         avg_degree = sum(nx.average_degree_connectivity(self.G).values())/self.n_agents
         avg_clustering_coeff = nx.average_clustering(self.G)
         centrality = nx.betweenness_centrality(self.G)
+        degree_sequence = sorted([d for n, d in self.G.degree()], reverse=True)
         
         self.Data_Collector["max IN degrees"].append(max(self.IN.values()))
         self.Data_Collector["avg degrees"].append(avg_degree)
         self.Data_Collector["avg clustering coeff"].append(avg_clustering_coeff)
         self.Data_Collector["betweenness centrality"].append(centrality)
+        self.Data_Collector["degree sequence"].append(degree_sequence)
 
 
     def step(self):
