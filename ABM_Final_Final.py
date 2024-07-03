@@ -124,7 +124,7 @@ class SocialNetwork():
 
     def utility_score(self, follower, followee):
         # normalize popularity by in_connections / total_connections
-        U_popularity = self.IN[follower] / max(self.IN)
+        U_popularity = self.IN[followee] / max(self.IN)
         U_similarity = 1 - abs(self.OPINIONS[follower] - self.OPINIONS[followee])
         # 1 / shortestpath, shortest_path is int >= 2
         U_proximity = 1 - (self.SHORTEST_PATH[follower][followee] / max(self.SHORTEST_PATH[follower].values()))
