@@ -15,15 +15,14 @@ First initialize parameters, then it runs the model and show some data.
 """
 # Parameters
 steps = 800
-n_agents = 75
-avg_degree = 25
-prob = avg_degree / n_agents
+n_agents = 100
+prob = 0.5
 
 
 # how important either of these things is (this decides whom to have an interaction with)
-w_popularity = 0.6
-w_proximity = 0.2
-w_similarity = 0.2
+w_popularity = 0.2
+w_proximity = 0.7
+w_similarity = 0.1
 k_graph = int(prob)
 p_graph = 0.5
 mu = 2.0  # Estimated average social distance for connections

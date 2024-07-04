@@ -34,7 +34,7 @@ from scipy.special import expit
 
 
 class SocialNetwork():
-    def __init__(self, n_agents, prob, w_pop, w_prox, w_sim, mu, temp, conf_mu=0.1, tol_mu=0.15):
+    def __init__(self, n_agents, prob, w_pop, w_prox, w_sim, mu, temp, sociability=0.1):
         self.n_agents = n_agents
         self.prob = prob
         self.w_pop = w_pop
@@ -57,14 +57,16 @@ class SocialNetwork():
         self.OPINIONS = {i: r.uniform(0, 1) for i in range(n_agents)}
         self.MAX = defaultdict(int)
 
-        self.CONFORMITY = {i: np.random.exponential(1/3)/10+conf_mu for i in range(n_agents)}
-        self.TOLERANCE = {i: np.random.exponential(1/3)/10+tol_mu for i in range(n_agents)}
+        self.SOCIABILITY = sociability
+
+        # self.CONFORMITY = {i: np.random.exponential(1/3)/10+conf_mu for i in range(n_agents)}
+        # self.TOLERANCE = {i: np.random.exponential(1/3)/10+tol_mu for i in range(n_agents)}
 
         # print(self.CONFORMITY)
         # print(self.TOLERANCE)
 
         self.SHORTEST_PATH = defaultdict(int)
-        self.Data_Collector = {"max IN degrees": [], "avg degrees": [],
+        self.Data_Collector = {"max IN degrees": [], "avg degrees": [], "IN degree" : [],
                                "avg clustering coeff" : [], "betweenness centrality" : [], 
                                "degree sequence": []}
         self.create_random_network()
@@ -90,12 +92,13 @@ class SocialNetwork():
         # or a global parameter?
         # conformity = 0.1
         for node in self.G.nodes():
-            conformity = self.CONFORMITY[node]
-            tolerance = self.TOLERANCE[node]
+            # conformity = self.CONFORMITY[node]
+            # tolerance = self.TOLERANCE[node]
+            sociability = self.SOCIABILITY
             opinions = []
             weights = []
             for i in self.WEIGHT[node]:
-                if abs(self.OPINIONS[i] - self.OPINIONS[node]) > tolerance:
+                if abs(self.OPINIONS[i] - self.OPINIONS[node]) > sociability:
                     continue
                 opinions.append(self.OPINIONS[i])
                 weights.append(self.WEIGHT[node][i])
@@ -104,7 +107,8 @@ class SocialNetwork():
             else:
                 consensus = np.average(opinions, weights=weights)
             old_opinion = self.OPINIONS[node]
-            new_opinion = old_opinion + conformity*(consensus - old_opinion)
+            # add noise to new_opinion
+            new_opinion = old_opinion + sociability*(consensus - old_opinion) + np.random.normal(0, 0.05)
             self.OPINIONS[node] = np.clip(new_opinion, 0, 1)
        
             # update weights based on difference of opinion
@@ -126,6 +130,7 @@ class SocialNetwork():
                     continue
                 else:
                     self.WEIGHT[node][i] = (new_weight-min_weight+0.001)/(max_weight-min_weight+0.001)
+                self.WEIGHT[node][i] *= ((1-self.SOCIABILITY) + (self.IN[i] / max(self.IN))*self.SOCIABILITY)
 
     def utility_score(self, follower, followee):
         # normalize popularity by in_connections / total_connections
@@ -149,7 +154,7 @@ class SocialNetwork():
 
 
     def decide_to_unfollow(self, follower, followee):
-        if 1 - self.WEIGHT[follower][followee] <= np.random.uniform(0,1):
+        if self.WEIGHT[follower][followee] <= np.random.uniform(0,1):
             return True
         else:
             return False
@@ -214,6 +219,7 @@ class SocialNetwork():
         self.Data_Collector["avg degrees"].append(avg_degree)
         self.Data_Collector["avg clustering coeff"].append(avg_clustering_coeff)
         self.Data_Collector["betweenness centrality"].append(centrality)
+        self.Data_Collector["IN degree"].append(self.IN.values())
         self.Data_Collector["degree sequence"].append(degree_sequence)
 
 
