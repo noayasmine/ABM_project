@@ -1,4 +1,4 @@
-from ABM_Final_Final import SocialNetwork
+from ABM_Final_Final_Final import SocialNetwork
 import pandas as pd
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -14,7 +14,7 @@ File to do a single run of the model.
 First initialize parameters, then it runs the model and show some data.
 """
 # Parameters
-steps = 800
+steps = 1000
 n_agents = 100
 prob = 0.5
 
@@ -25,11 +25,12 @@ w_proximity = 0.7
 w_similarity = 0.1
 k_graph = int(prob)
 p_graph = 0.5
-mu = 2.0  # Estimated average social distance for connections
-temp = 1.0  # Initial guess for temperature
+mu = 0.3  # Estimated average social distance for connections
+temp = 0.1  # Initial guess for temperature
+sociability=0.09
 
 # Initialize and run the model
-model = SocialNetwork(n_agents, prob, w_popularity, w_proximity, w_similarity, mu, temp)
+model = SocialNetwork(n_agents, prob, w_popularity, w_proximity, w_similarity, mu, temp, sociability)
 
 for i in range(steps + 1):
     model.step()
