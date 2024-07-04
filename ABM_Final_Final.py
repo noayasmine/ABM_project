@@ -109,7 +109,12 @@ class SocialNetwork():
        
             # update weights based on difference of opinion
             for i in self.WEIGHT[node]:
-                new_weight = self.WEIGHT[node][i]
+                # new_weight = self.WEIGHT[node][i]
+                denom = self.OPINIONS[node]-self.OPINIONS[i]
+                if denom < 0.01:
+                    new_weight = self.WEIGHT[node][i]
+                else:
+                    new_weight = self.WEIGHT[node][i]*(old_opinion-self.OPINIONS[i])/denom
                 # weights between 0 and 1
                 min_weight = np.min(weights) if len(weights) != 0 else 0
                 max_weight = np.max(weights) if len(weights) != 0 else 1
