@@ -1,0 +1,486 @@
+import networkx as nx
+import random
+import string
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.stats import entropy
+from sklearn.neighbors import KernelDensity
+from powerlaw import Fit
+import community as community_louvain  # Use python-louvain package for modularity
+from IPython.display import clear_output
+
+def generate_unique_identifier():
+    """Generate a unique identifier by combining the current number of nodes with random letters."""
+    random_letters = ''.join(random.choices(string.ascii_letters, k=5))
+    return f"node_{random_letters}"
+
+def generate_network(n, p, profiles, p_values):
+    # Generate a directed Erdos-Renyi graph
+    DG = nx.erdos_renyi_graph(n, p, directed=True)
+    
+    profile_list = sum([[profile] * int(frac * n) for profile, frac in profiles.items()], [])
+    random.shuffle(profile_list)
+    
+    for node, profile in zip(list(DG.nodes()), profile_list):
+        unique_id = generate_unique_identifier()
+        nx.relabel_nodes(DG, {node: unique_id}, copy=False)
+        DG.nodes[unique_id]['Op'] = round(random.random(), 3)
+        DG.nodes[unique_id]['profile'] = profile
+        
+        if profile in ['random', 'homophily']:
+            p_values_node = np.random.dirichlet(np.ones(3), size=1)[0]
+        else:
+            p_values_node = p_values[profile]
+        
+        DG.nodes[unique_id]['p_sim'], DG.nodes[unique_id]['p_pop'], DG.nodes[unique_id]['p_dis'] = p_values_node
+        soc_value = np.random.normal(0.5, 0.2)
+        soc_value = max(0, min(1, soc_value))  # Apply bounds
+        DG.nodes[unique_id]['soc'] = round(soc_value, 3)
+
+    for u, v in DG.edges():
+        DG[u][v]['OpDis'] = abs(DG.nodes[u]['Op'] - DG.nodes[v]['Op'])
+
+    print("network initialized")
+    return DG
+
+def add_new_nodes(DG, profiles, p_values, proportion):
+    num_nodes = DG.number_of_nodes()
+    max_new_nodes = max(1, int(proportion * num_nodes))  # At least 1 new node
+    num_new_nodes = random.randint(0, max_new_nodes)
+    
+    new_nodes = []
+    profile_list = list(profiles.keys())
+    profile_weights = list(profiles.values())
+    edges_to_add = []
+
+    out_degrees = [d for n, d in DG.out_degree() if d > 0]
+    if not out_degrees:
+        out_degrees = [1]  # Default to 1 if no nodes have an out-degree > 0
+    
+    for _ in range(num_new_nodes):
+        new_node = generate_unique_identifier()
+        DG.add_node(new_node)
+        DG.nodes[new_node]['Op'] = round(random.random(), 3)
+        profile = random.choices(profile_list, weights=profile_weights, k=1)[0]
+        DG.nodes[new_node]['profile'] = profile
+        
+        if profile in ['random', 'homophily']:
+            p_values_node = np.random.dirichlet(np.ones(3), size=1)[0]
+        else:
+            p_values_node = p_values[profile]
+        
+        DG.nodes[new_node]['p_sim'], DG.nodes[new_node]['p_pop'], DG.nodes[new_node]['p_dis'] = p_values_node
+        
+        soc_value = np.random.normal(0.5, 0.2)
+        soc_value = max(0, min(1, soc_value))  # Apply bounds
+        DG.nodes[new_node]['soc'] = round(soc_value, 3)
+
+        new_nodes.append(new_node)
+
+    existing_nodes = list(set(DG.nodes()) - set(new_nodes))
+    degrees = dict(DG.degree(existing_nodes))
+
+    for new_node in new_nodes:
+        num_new_edges = random.choices(out_degrees, k=1)[0]
+        targets = []
+        for _ in range(num_new_edges):
+            weights = [(1 - abs(DG.nodes[new_node]['Op'] - DG.nodes[v]['Op'])) +
+                       (degrees[v] + 1) / (max(degrees.values()) + 1) for v in existing_nodes]
+            total_weight = sum(weights)
+            probabilities = [weight / total_weight for weight in weights]
+            target = random.choices(existing_nodes, weights=probabilities, k=1)[0]
+            targets.append(target)
+        edges_to_add.extend((new_node, target) for target in targets)
+
+    DG.add_edges_from(edges_to_add)
+
+    for u, v in edges_to_add:
+        DG[u][v]['OpDis'] = abs(DG.nodes[u]['Op'] - DG.nodes[v]['Op'])
+
+def remove_nodes_based_on_opdis(DG, proportion, max_nodes_to_remove=None):
+    num_nodes = DG.number_of_nodes()
+    if max_nodes_to_remove is None:
+        max_nodes_to_remove = max(1, int(proportion * num_nodes))  # At least 1 node to remove
+    num_nodes_to_remove = random.randint(0, max_nodes_to_remove)
+    
+    # Calculate average OpDis for each node's out-edges
+    opdis_averages = {}
+    for node in DG.nodes():
+        out_edges = DG.out_edges(node)
+        if out_edges:
+            opdis_average = np.mean([DG[u][v]['OpDis'] for u, v in out_edges])
+            opdis_averages[node] = opdis_average
+        else:
+            opdis_averages[node] = 0
+    
+    # Normalize the probabilities
+    total_opdis = sum(opdis_averages.values())
+    if total_opdis == 0:
+        probabilities = {node: 1 for node in opdis_averages}  # Equal probability if total_opdis is zero
+    else:
+        probabilities = {node: opdis_averages[node] / total_opdis for node in opdis_averages}
+
+    nodes_to_remove = random.choices(list(probabilities.keys()), weights=probabilities.values(), k=num_nodes_to_remove)
+    DG.remove_nodes_from(nodes_to_remove)
+
+def bimodality_index(opinions):
+    """Calculate bimodality index using kernel density estimation."""
+    kde = KernelDensity(kernel='gaussian', bandwidth=0.05).fit(np.array(opinions).reshape(-1, 1))
+    log_dens = kde.score_samples(np.linspace(0, 1, 1000).reshape(-1, 1))
+    dens = np.exp(log_dens)
+    return np.max(dens) - np.min(dens)
+
+def opinion_entropy(opinions):
+    """Calculate Shannon entropy of opinions."""
+    value, counts = np.unique(opinions, return_counts=True)
+    return entropy(counts)
+
+def modularity(G):
+    """Calculate the modularity of the network."""
+    undirected_G = G.to_undirected()
+    partition = community_louvain.best_partition(undirected_G)
+    return community_louvain.modularity(partition, undirected_G)
+
+def update_network(DG, steps, profiles, p_values, proportion, nodes_change):
+    DG.remove_edges_from(nx.selfloop_edges(DG))
+    
+    connectivity_metrics = {
+        'step': [],
+        'average_clustering': [],
+        'density': [],
+        'reciprocity': [],
+        'nodes_with_new_edges': [],
+        'nodes_with_cut_edges': [],
+        'bimodality_index': [],
+        'entropy': [],
+        'modularity': [],
+        'alpha_out': [],
+        'alpha_in': [],
+        'assortativity_in_degree': [],
+        'assortativity_out_degree': [],
+        'assortativity_out_opinion': []
+    }
+    
+    for step in range(steps):
+        if nodes_change:
+            if step > 0:
+                add_new_nodes(DG, profiles, p_values, proportion)
+        
+        # Calculate old OpDis values before edge updates
+        old_opdis = {u: np.mean([DG[u][v]['OpDis'] for u, v in DG.out_edges(u)]) if DG.out_edges(u) else 0 for u in DG.nodes()}
+        
+        connectivity_metrics['step'].append(step)
+        connectivity_metrics['average_clustering'].append(nx.average_clustering(DG))
+        connectivity_metrics['density'].append(nx.density(DG))
+        connectivity_metrics['reciprocity'].append(nx.reciprocity(DG))      
+
+        opinions = [DG.nodes[node]['Op'] for node in DG.nodes()]
+
+        # Calculate and store the additional metrics
+        connectivity_metrics['bimodality_index'].append(bimodality_index(opinions))
+        connectivity_metrics['entropy'].append(opinion_entropy(opinions))
+        connectivity_metrics['modularity'].append(modularity(DG))
+
+        # Fit out-degree and in-degree distributions to a power law and store the alpha values
+        out_degrees = [DG.out_degree(n) + 1 for n in DG.nodes()]
+        in_degrees = [DG.in_degree(n) + 1 for n in DG.nodes()]
+
+        clear_output(wait=True)
+
+        fit_out = Fit(out_degrees, discrete=True)
+        fit_in = Fit(in_degrees, discrete=True)
+
+        connectivity_metrics['alpha_out'].append(fit_out.alpha)
+        connectivity_metrics['alpha_in'].append(fit_in.alpha)
+
+        # Calculate assortativity based on degree and opinion
+        connectivity_metrics['assortativity_in_degree'].append(nx.degree_assortativity_coefficient(DG, x='in', y='in'))
+        connectivity_metrics['assortativity_out_degree'].append(nx.degree_assortativity_coefficient(DG, x='out', y='out'))
+        connectivity_metrics['assortativity_out_opinion'].append(nx.attribute_assortativity_coefficient(DG.reverse(), 'Op'))
+
+        new_edges = []
+        edges_to_remove = []
+
+        DG_copy = DG.copy()
+        
+        # Initialize counters for added and removed edges
+        edges_added_counter = 0
+        edges_removed_counter = 0
+        initial_edge_count = DG.number_of_edges()
+
+        for u in list(DG.nodes()):  # Convert DG.nodes() to a list to avoid RuntimeError
+            
+            out_neighbors = set(DG.successors(u))
+            
+            if DG.out_degree(u) > 0:
+                # Edge addition
+                shortest_paths = nx.single_source_shortest_path_length(DG, source=u)
+                
+                reachable_nodes = {v: l for v, l in shortest_paths.items() if l > 1 and v not in out_neighbors and v != u}
+
+                if reachable_nodes:
+                    p_sim = DG.nodes[u]['p_sim']
+                    p_pop = DG.nodes[u]['p_pop']
+                    p_dis = DG.nodes[u]['p_dis']
+                    
+                    # Calculate probabilities using Fermi-Dirac distribution
+                    l_max = max(reachable_nodes.values())
+                    weights_fermi_dirac = {
+                        v: 1 / ((np.exp(((l / l_max) - DG.nodes[u]['soc']) / (0.01 + (0.99 * (1 - p_dis))))) + 1)
+                        for v, l in reachable_nodes.items()
+                    }
+                    total_weight = sum(weights_fermi_dirac.values())
+                    probabilities = {v: weight / total_weight for v, weight in weights_fermi_dirac.items()}  # Normalize probabilities
+                    v = random.choices(list(probabilities.keys()), weights=probabilities.values())[0]
+
+                    max_in_degree = max(DG.in_degree(n) for n in DG.nodes())
+                    Op_u = DG.nodes[u]['Op']
+                    Op_v = DG.nodes[v]['Op']
+                    in_deg_v = DG.in_degree(v)
+
+                    prob_new_edge = min((p_sim * (1 - abs(Op_v - Op_u))) + 
+                                        (p_pop * (in_deg_v / max_in_degree)) + 
+                                        (p_dis * (1 / shortest_paths[v])), 1)
+
+                    if random.random() < (DG.nodes[u]['soc'] * prob_new_edge):
+                        new_edges.append((u, v))
+                        edges_added_counter += 1
+                        
+        for u in list(DG.nodes()):  # Convert DG.nodes() to a list to avoid RuntimeError
+            out_neighbors = set(DG.successors(u))
+            
+            # Edge removal (only consider nodes with more than one out-edge)
+            if DG.out_degree(u) > 1:
+                reachable_if_edge_removed = {}
+                for v in out_neighbors:
+                    # Remove the edge (u, v) from the copied graph
+                    if DG_copy.has_edge(u, v):
+                        DG_copy.remove_edge(u, v)
+                        try:
+                            # Compute the shortest path length from u to v in the modified graph
+                            path_length = nx.shortest_path_length(DG_copy, source=u, target=v)
+                            # Store the path length in the dictionary only if a path exists
+                            reachable_if_edge_removed[v] = path_length
+                        except nx.NetworkXNoPath:
+                            # If there is no path, do not store anything
+                            pass
+                        # Re-add the edge to the copied graph
+                        DG_copy.add_edge(u, v)
+                
+                unreachable_if_edge_removed_nodes = set(out_neighbors) - set(reachable_if_edge_removed.keys())                    
+                
+                if unreachable_if_edge_removed_nodes:
+                    v = random.choice(list(unreachable_if_edge_removed_nodes))
+                    Op_v = DG.nodes[v]['Op']
+                    in_deg_v = DG.in_degree(v)
+
+                    prob_remove_edge = min(((p_sim * abs(Op_v - Op_u)) + 
+                                            (p_pop * (1 - (in_deg_v / max_in_degree)))) / (p_sim + p_pop), 1)
+
+                    if DG.has_edge(u, v) and random.random() < ((1 - DG.nodes[u]['soc']) * prob_remove_edge):
+                        edges_to_remove.append((u, v))
+                        edges_removed_counter += 1
+                    
+                else:
+                    l_max = max(reachable_if_edge_removed.values())
+                    weights_fermi_dirac_inverse = {
+                        v: 1-(1 / ((np.exp(((l / l_max) - DG.nodes[u]['soc']) / (0.01 + (0.99 * (1 - p_dis))))) + 1))
+                        for v, l in reachable_if_edge_removed.items()
+                    }
+                    total_weight = sum(weights_fermi_dirac_inverse.values())
+                    probabilities = {v: weight / total_weight for v, weight in weights_fermi_dirac_inverse.items()}  # Normalize probabilities
+                    
+                    v = random.choices(list(probabilities.keys()), weights=probabilities.values())[0]
+
+                    prob_remove_edge = min((p_sim * abs(Op_v - Op_u)) + 
+                                           (p_pop * (1 - (in_deg_v / max_in_degree))) + 
+                                           (p_dis * (1 - (1 / reachable_if_edge_removed[v]))), 1)
+
+                    if DG.has_edge(u, v) and random.random() < ((1 - DG.nodes[u]['soc']) * prob_remove_edge):
+                        edges_to_remove.append((u, v))
+                        edges_removed_counter += 1
+
+                
+
+        # Add new edges
+        DG.add_edges_from(new_edges)
+
+        # Remove edges
+        DG.remove_edges_from(edges_to_remove)
+
+        # Calculate relative edges added and removed
+        if initial_edge_count > 0:
+            relative_edges_added = edges_added_counter / initial_edge_count
+            relative_edges_removed = edges_removed_counter / initial_edge_count
+        else:
+            relative_edges_added = 0
+            relative_edges_removed = 0
+
+        connectivity_metrics['nodes_with_new_edges'].append(relative_edges_added)
+        connectivity_metrics['nodes_with_cut_edges'].append(relative_edges_removed)
+
+        # Recalculate OpDis
+        for u, v in DG.edges():
+            DG[u][v]['OpDis'] = abs(DG.nodes[u]['Op'] - DG.nodes[v]['Op'])
+
+        # Calculate new OpDis values after edge updates
+        new_opdis = {u: np.mean([DG[u][v]['OpDis'] for u, v in DG.out_edges(u)]) if DG.out_edges(u) else 0 for u in DG.nodes()}
+
+        # Homophily profile adjustment
+        for u in list(DG.nodes()):
+            if DG.nodes[u]['profile'] == 'homophily':
+                if new_opdis[u] >= old_opdis[u]:
+                    new_p_values = np.random.dirichlet(np.ones(3), size=1)[0]
+                    DG.nodes[u]['p_sim'], DG.nodes[u]['p_pop'], DG.nodes[u]['p_dis'] = new_p_values
+
+        # Random profile rerandomization
+        for u in list(DG.nodes()):
+            if DG.nodes[u]['profile'] == 'random':
+                new_p_values = np.random.dirichlet(np.ones(3), size=1)[0]
+                DG.nodes[u]['p_sim'], DG.nodes[u]['p_pop'], DG.nodes[u]['p_dis'] = new_p_values
+
+        # Recalculate the opinions
+        new_opinions = {}
+        for node in list(DG.nodes()):  # Convert DG.nodes() to a list to avoid RuntimeError
+            sociality = DG.nodes[node]['soc']
+            old_opinion = DG.nodes[node]['Op']
+            if random.random() < sociality:
+                if DG.out_degree(node) > 0:  # Only update if out-degree is greater than 0
+                    out_neighbors = list(DG.successors(node))
+                    if out_neighbors:
+                        avg_out_opinion = sum(DG.nodes[neighbor]['Op'] for neighbor in out_neighbors) / len(out_neighbors)
+                        new_opinion = (old_opinion * (1 - sociality)) + (avg_out_opinion * sociality)
+                    else:
+                        new_opinion = old_opinion
+            else:
+                new_opinion = old_opinion
+                    
+            new_opinions[node] = round(new_opinion, 3)
+        
+        # Update opinions
+        for node, new_opinion in new_opinions.items():
+            DG.nodes[node]['Op'] = new_opinion
+
+        # Recalculate OpDis
+        for u, v in DG.edges():
+            DG[u][v]['OpDis'] = abs(DG.nodes[u]['Op'] - DG.nodes[v]['Op'])
+
+        # Remove nodes based on OpDis at the end of each step
+        if nodes_change:
+            if step > 0:
+                remove_nodes_based_on_opdis(DG, proportion)
+
+        clear_output(wait=True)
+
+    return connectivity_metrics
+
+n = 100  # Number of nodes
+p = 0.3  # Probability of edge creation in Erdos-Renyi graph
+proportion = 0.025  # Proportion of nodes to add/remove
+nodes_change = True #if "True", nodes are added and removed every turn to simulate agents arriving and leaving
+
+profiles_list = ['homophily', 'random', 'manual_sim', 'manual_pop', 'manual_dis']
+p_values = {
+    'homophily': None,  # This will be set dynamically
+    'random': None,  # This will be set dynamically
+    'manual_sim': [0.99, 0.005, 0.005],
+    'manual_pop': [0.005, 0.99, 0.005],
+    'manual_dis': [0.005, 0.005, 0.99]
+}
+
+steps = 300
+metrics_dict = {}
+
+for profile in profiles_list:
+    profiles = {p: 1.0 if p == profile else 0.0 for p in profiles_list}
+    DG = generate_network(n, p, profiles, p_values)
+    metrics = update_network(DG, steps, profiles, p_values, proportion, nodes_change)
+    metrics_dict[profile] = metrics
+
+# Plotting the metrics in unified plots
+# Plotting the metrics in unified plots
+fig, axes = plt.subplots(7, 2, figsize=(15, 35))
+axes = axes.flatten()
+
+for profile in profiles_list:
+    axes[0].plot(metrics_dict[profile]['step'], metrics_dict[profile]['average_clustering'], label=profile)
+    axes[1].plot(metrics_dict[profile]['step'], metrics_dict[profile]['density'], label=profile)
+    axes[2].plot(metrics_dict[profile]['step'], metrics_dict[profile]['reciprocity'], label=profile)
+    axes[3].plot(metrics_dict[profile]['step'], metrics_dict[profile]['entropy'], label=profile)  # Moved entropy plot here
+    axes[4].plot(metrics_dict[profile]['step'], metrics_dict[profile]['nodes_with_new_edges'], label=profile)
+    axes[5].plot(metrics_dict[profile]['step'], metrics_dict[profile]['nodes_with_cut_edges'], label=profile)
+    axes[6].plot(metrics_dict[profile]['step'], metrics_dict[profile]['bimodality_index'], label=profile)
+    axes[7].plot(metrics_dict[profile]['step'], metrics_dict[profile]['modularity'], label=profile)
+    axes[8].plot(metrics_dict[profile]['step'], metrics_dict[profile]['alpha_out'], label=f"{profile} (out-degree)")  # Plot alpha out
+    axes[9].plot(metrics_dict[profile]['step'], metrics_dict[profile]['alpha_in'], label=f"{profile} (in-degree)")  # Plot alpha in
+    axes[10].plot(metrics_dict[profile]['step'], metrics_dict[profile]['assortativity_in_degree'], label=profile)
+    axes[11].plot(metrics_dict[profile]['step'], metrics_dict[profile]['assortativity_out_degree'], label=profile)
+    axes[12].plot(metrics_dict[profile]['step'], metrics_dict[profile]['assortativity_out_opinion'], label=profile)
+
+axes[0].set_title('Average Clustering Coefficient Over Time')
+axes[0].set_xlabel('Step')
+axes[0].set_ylabel('Average Clustering Coefficient')
+axes[0].legend(loc='upper left')
+
+axes[1].set_title('Density Over Time')
+axes[1].set_xlabel('Step')
+axes[1].set_ylabel('Density')
+axes[1].legend(loc='upper left')
+
+axes[2].set_title('Reciprocity Over Time')
+axes[2].set_xlabel('Step')
+axes[2].set_ylabel('Reciprocity')
+axes[2].legend(loc='upper left')
+
+axes[3].set_title('Opinion Entropy Over Time')
+axes[3].set_xlabel('Step')
+axes[3].set_ylabel('Entropy')
+axes[3].legend(loc='lower left')
+
+axes[4].set_title('Number of Nodes that Formed New Edges Over Time')
+axes[4].set_xlabel('Step')
+axes[4].set_ylabel('Number of Nodes')
+axes[4].legend(loc='lower left')
+
+axes[5].set_title('Number of Nodes that Cut Edges Over Time')
+axes[5].set_xlabel('Step')
+axes[5].set_ylabel('Number of Nodes')
+axes[5].legend(loc='upper left')
+
+axes[6].set_title('Opinion Bimodality Index Over Time')
+axes[6].set_xlabel('Step')
+axes[6].set_ylabel('Bimodality Index')
+axes[6].legend(loc='lower right')
+
+axes[7].set_title('Modularity Over Time')
+axes[7].set_xlabel('Step')
+axes[7].set_ylabel('Modularity')
+axes[7].legend(loc='lower left')
+
+axes[8].set_title('Alpha of Out-degree Power-law Fit Over Time')
+axes[8].set_xlabel('Step')
+axes[8].set_ylabel('Alpha (Out-degree)')
+axes[8].legend(loc='lower left')
+
+axes[9].set_title('Alpha of In-degree Power-law Fit Over Time')
+axes[9].set_xlabel('Step')
+axes[9].set_ylabel('Alpha (In-degree)')
+axes[9].legend(loc='lower left')
+
+axes[10].set_title('Assortativity of In-degree Over Time')
+axes[10].set_xlabel('Step')
+axes[10].set_ylabel('Assortativity (In-degree)')
+axes[10].legend(loc='upper left')
+
+axes[11].set_title('Assortativity of Out-degree Over Time')
+axes[11].set_xlabel('Step')
+axes[11].set_ylabel('Assortativity (Out-degree)')
+axes[11].legend(loc='upper left')
+
+axes[12].set_title('Assortativity of Out-degree Based on Opinion Over Time')
+axes[12].set_xlabel('Step')
+axes[12].set_ylabel('Assortativity (Out-degree based on Opinion)')
+axes[12].legend(loc='upper left')
+
+plt.tight_layout()
+plt.show()
