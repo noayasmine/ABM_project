@@ -1,5 +1,5 @@
 import itertools
-from ABM_Final_Final import SocialNetwork
+from ABM_Final_Final_Final import SocialNetwork
 import pandas as pd
 import os
 
@@ -38,9 +38,6 @@ for i in range(len(combinations)):
     w_pop = combinations[i][0]
     w_prox = combinations[i][1]
     w_sim = combinations[i][2]
-    
-    combined_results = pd.DataFrame()  # DataFrame to store all repetitions
-    combined_opinions = pd.DataFrame()  # DataFrame to store end opinions for all repetitions
 
     for repeat in range(n_repeats):
         print(f"  Repeat {repeat+1}/{n_repeats}")
@@ -53,25 +50,16 @@ for i in range(len(combinations)):
         
         # Collect results for the current repeat
         df_results = pd.DataFrame(model.Data_Collector)
-        w_pop_list = [w_pop] * (steps + 1)
-        w_prox_list = [w_prox] * (steps + 1)
-        w_sim_list = [w_sim] * (steps + 1)
-        run = [repeat + 1] * (steps + 1)
-        df_results.insert(0, "run", run)
-        df_results.insert(0, "w_pop", w_pop_list)
-        df_results.insert(0, "w_prox", w_prox_list)
-        df_results.insert(0, "w_sim", w_sim_list)
         
-        combined_results = pd.concat([combined_results, df_results], ignore_index=True)
-        
-        # Collect end opinions for the current repeat
-        end_opinions = pd.DataFrame({'Opinions': model.OPINIONS, 'run': [repeat + 1] * len(model.OPINIONS),
-                                     'w_pop': [w_pop] * len(model.OPINIONS), 'w_prox': [w_prox] * len(model.OPINIONS),
-                                     'w_sim': [w_sim] * len(model.OPINIONS)})
-        combined_opinions = pd.concat([combined_opinions, end_opinions], ignore_index=True)
-    
-    # Save the combined results to a single file
-    combined_results.to_csv(os.path.join(output_folder, f"pop{w_pop}prox{w_prox}sim{w_sim}_20repeats.csv"), index=False)
+        # Save the results to a CSV file
+        results_filename = f"pop{w_pop}prox{w_prox}sim{w_sim}_repeat{repeat + 1}.csv"
+        df_results.to_csv(os.path.join(output_folder, results_filename), index=False)
 
-    # Save the combined end opinions to a single file
-    combined_opinions.to_csv(os.path.join(output_folder, f"pop{w_pop}prox{w_prox}sim{w_sim}_opinions.csv"), index=False)
+        # Collect end opinions for the current repeat
+        end_opinions = pd.DataFrame({
+            'Opinions': model.OPINIONS
+        })
+        
+        # Save the end opinions to a CSV file
+        opinions_filename = f"pop{w_pop}prox{w_prox}sim{w_sim}_opinions_repeat{repeat + 1}.csv"
+        end_opinions.to_csv(os.path.join(output_folder, opinions_filename), index=False)
