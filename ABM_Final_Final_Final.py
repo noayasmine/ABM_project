@@ -35,15 +35,13 @@ from scipy.special import expit
 
 
 class SocialNetwork():
-    def __init__(self, n_agents, prob, w_pop, w_prox, w_sim, mu, temp, sociability):
+    def __init__(self, n_agents, prob, w_pop, w_prox, w_sim, sociability):
         self.n_agents = n_agents
         self.prob = prob
         self.w_pop = w_pop
         self.w_prox = w_prox
         self.w_sim = w_sim
         self.prob = prob
-        self.mu = mu
-        self.temperature = temp
 
         # {Node1 : IN_Degree, Node2 : IN_Degree}
         self.IN = defaultdict(int)
@@ -82,49 +80,8 @@ class SocialNetwork():
             self.MAX[node] = r.choice(range(self.G.out_degree(node), self.n_agents))
         self.SHORTEST_PATH = dict(nx.shortest_path_length(self.G))
    
-    def update_opinions_and_weights_old(self):
-
-        for node in self.G.nodes():
-            sociability = self.SOCIABILITY
-            opinions = []
-            weights = []
-            
-            for i in self.WEIGHT[node]:
-                if abs(self.OPINIONS[i] - self.OPINIONS[node]) > sociability:
-                    continue
-                opinions.append(self.OPINIONS[i])
-                weights.append(self.WEIGHT[node][i])
-                
-            if sum(weights) == 0:
-                consensus = 0.5
-                
-            else:
-                consensus = np.average(opinions, weights=weights)
-                
-            old_opinion = self.OPINIONS[node]
-            new_opinion = old_opinion + sociability * (consensus - old_opinion) + np.random.normal(0,0.01)
-            self.OPINIONS[node] = np.clip(new_opinion, 0, 1)
-       
-            # update weights based on difference of opinion
-            for i in self.WEIGHT[node]:
-                new_weight = self.WEIGHT[node][i]
-                # weights between 0 and 1
-                min_weight = np.min(weights) if len(weights) != 0 else 0
-                max_weight = np.max(weights) if len(weights) != 0 else 1
-                if max_weight == 0:
-                    max_weight = 1
-                    min_weight = 0
-                    
-                # otherwise it threw some errors when the average degree was low by initializing
-                if max_weight - min_weight == 0:
-                    continue
-                else:
-                    self.WEIGHT[node][i] = (new_weight-min_weight+0.001)/(max_weight-min_weight+0.001)
-                
-                self.WEIGHT[node][i] *= ((1-sociability) + (self.IN[i] / max(self.IN) * sociability))
-                self.G[node][neighbor]['weight'] = new_weight
-                
-    def update_opinions_and_weights(self):
+    
+    def update_opinions_and_weights(self,last_step=False):
         
         for node in self.G.nodes():
             sociability = self.SOCIABILITY
@@ -166,44 +123,14 @@ class SocialNetwork():
                 # Clip weights between 0 and 1
                 self.WEIGHT[node][i] = np.clip(self.WEIGHT[node][i], 0, 1)
                 
-    def update_opinions_and_weights_option2(self):
-        
-        for node in self.G.nodes():
-            sociability = self.SOCIABILITY
-            opinions = []
-            weights = []
+                #self.G[node][i]['weight'] = self.WEIGHT[node][i]
+                #if last_step:
+                    #print('ADDING WEIGHTS')
+                    #self.G[node][i]['weight'] = self.WEIGHT[node][i]
 
-            for i in self.WEIGHT[node]:
-                if abs(self.OPINIONS[i] - self.OPINIONS[node]) > sociability:
-                    continue
-                opinions.append(self.OPINIONS[i])
-                weights.append(self.WEIGHT[node][i])
-
-            if sum(weights) == 0:
-                continue
-            
-            else:
-                consensus = np.average(opinions, weights=weights)
-                
-                old_opinion = self.OPINIONS[node]
-                new_opinion = old_opinion + sociability * (consensus - old_opinion) + np.random.normal(0, 0.01)
-                
-                self.OPINIONS[node] = np.clip(new_opinion, 0, 1)
-
-            for i in self.WEIGHT[node]:
-                opinion_diff = abs(self.OPINIONS[i] - new_opinion) 
-                
-                self.WEIGHT[node][i] = (1 - opinion_diff) 
-                # Decrease the weights a bit for unpopular agents
-                # Sociability is a value around 0.1, this results in a factor which is <1 for unpopular 
-                # agents and 1 for most popular agent
-                self.WEIGHT[node][i] *= ((1-sociability) + (self.IN[i] / max(self.IN) * sociability))
-                noise = np.random.normal(0, 0.01)  # Adding noise to the weight adjustment
-                self.WEIGHT[node][i] += noise
                 
                 
-                # Clip weights between 0 and 1
-                self.WEIGHT[node][i] = np.clip(self.WEIGHT[node][i], 0, 1)
+    
 
     def utility_score(self, follower, followee):
         U_popularity = self.IN[followee] / max(self.IN) 
@@ -249,17 +176,13 @@ class SocialNetwork():
         if len(distances) == 0:
             return
         
-        exponents = (distances / max(self.SHORTEST_PATH) - self.mu) / self.temperature
-        probs = expit(-exponents)
-   
-        total_prob = np.sum(probs)
-        if total_prob == 0:
-            norm_probs = np.zeros_like(probs)
-        else:
-            norm_probs = probs / total_prob
+        #exponents = (distances / max(self.SHORTEST_PATH) - self.mu) / self.temperature
+        #probs = expit(-exponents)
+        
+        exponents = ((distances / max(distances) - self.SOCIABILITY) / (0.01 + (0.99 * (1-self.w_prox))))
+        probs = 1/(1+np.exp(-exponents))
 
-
-        encounter = r.choices(agents, weights=norm_probs, k=1)
+        encounter = r.choices(agents, weights=probs, k=1)
         return encounter[0]
    
     def add_connection(self, follower, followee):
@@ -297,7 +220,7 @@ class SocialNetwork():
         self.Data_Collector["IN degree"].append(self.IN.values())
 
 
-    def step(self):
+    def step(self,last_step=False):
         # initialize list to keep track how the network should change
         edges_to_add = []
         edges_to_remove = []
