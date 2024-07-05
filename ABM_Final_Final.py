@@ -108,7 +108,7 @@ class SocialNetwork():
                 consensus = np.average(opinions, weights=weights)
             old_opinion = self.OPINIONS[node]
             # add noise to new_opinion
-            new_opinion = old_opinion + sociability*(consensus - old_opinion) + np.random.normal(0, 0.05)
+            new_opinion = old_opinion + sociability*(consensus - old_opinion) + np.random.normal(0, 0.01)
             self.OPINIONS[node] = np.clip(new_opinion, 0, 1)
        
             # update weights based on difference of opinion
