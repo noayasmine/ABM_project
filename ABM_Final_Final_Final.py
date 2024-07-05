@@ -53,29 +53,22 @@ class SocialNetwork():
         # for user engagement: self.WEIGHT[follower][influencer]
         self.WEIGHT = defaultdict(lambda: defaultdict(float))
         # for engagement received from follower: self.UTILITIES[influencer][follower]
-        # for total engagement: sum(self.UTILITIES[influencer].values())
         self.UTILITIES = defaultdict(lambda: defaultdict(float))
         self.OPINIONS = {i: r.uniform(0, 1) for i in range(n_agents)}
         self.MAX = defaultdict(int)
 
-        #self.CONFORMITY = {i: np.random.exponential(1/3)/10+conf_mu for i in range(n_agents)}
-        #self.TOLERANCE = {i: np.random.exponential(1/3)/10+tol_mu for i in range(n_agents)}
         self.SOCIABILITY = sociability
-        #self.TOLERANCE = sociability
-        #self.decay_factor = {i: np.random.uniform(0.9,1) for i in range(n_agents)}
-        #self.activity = {i: np.random.uniform(0,1) for i in range(n_agents)}
-        # print(self.CONFORMITY)
-        # print(self.TOLERANCE)
 
         self.SHORTEST_PATH = defaultdict(int)
         self.Data_Collector = {"max IN degrees": [], "avg degrees": [],
                                "avg clustering coeff" : [], "betweenness centrality" : [], 
                                "degree sequence": [], "IN degree": []}
+        
         self.create_random_network()
    
     def create_random_network(self):
         self.G = nx.gnp_random_graph(n=self.n_agents, p=self.prob, directed=True)
-        #self.G = nx.scale_free_graph(n=self.n_agents)
+
         # add weights to the edges
         for node in self.G.nodes():
             out_edges = list(self.G.out_edges(node))
@@ -89,29 +82,27 @@ class SocialNetwork():
             self.MAX[node] = r.choice(range(self.G.out_degree(node), self.n_agents))
         self.SHORTEST_PATH = dict(nx.shortest_path_length(self.G))
    
-    def update_opinions_and_weights(self):
-        # conformity is the rate an agent changes their opinion to match their neighborhood
-        # we probably should make it a random parameter for each agent
-        # or a global parameter?
-        # conformity = 0.1
-        for j, node in enumerate(self.G.nodes()):
-            conformity = self.SOCIABILITY
-            tolerance = self.SOCIABILITY
+    def update_opinions_and_weights_old(self):
+
+        for node in self.G.nodes():
+            sociability = self.SOCIABILITY
             opinions = []
             weights = []
             
             for i in self.WEIGHT[node]:
-                if abs(self.OPINIONS[i] - self.OPINIONS[node]) > tolerance:
+                if abs(self.OPINIONS[i] - self.OPINIONS[node]) > sociability:
                     continue
                 opinions.append(self.OPINIONS[i])
                 weights.append(self.WEIGHT[node][i])
                 
             if sum(weights) == 0:
                 consensus = 0.5
+                
             else:
                 consensus = np.average(opinions, weights=weights)
+                
             old_opinion = self.OPINIONS[node]
-            new_opinion = old_opinion + conformity*(consensus - old_opinion) + np.random.normal(0,0.01)
+            new_opinion = old_opinion + sociability * (consensus - old_opinion) + np.random.normal(0,0.01)
             self.OPINIONS[node] = np.clip(new_opinion, 0, 1)
        
             # update weights based on difference of opinion
@@ -123,22 +114,100 @@ class SocialNetwork():
                 if max_weight == 0:
                     max_weight = 1
                     min_weight = 0
+                    
                 # otherwise it threw some errors when the average degree was low by initializing
                 if max_weight - min_weight == 0:
                     continue
                 else:
                     self.WEIGHT[node][i] = (new_weight-min_weight+0.001)/(max_weight-min_weight+0.001)
-                #print((0.95 + (self.IN[i] / max(self.IN) * 0.05)))
                 
-                self.WEIGHT[node][i] *= ((1-self.SOCIABILITY) + (self.IN[i] / max(self.IN) * self.SOCIABILITY))
+                self.WEIGHT[node][i] *= ((1-sociability) + (self.IN[i] / max(self.IN) * sociability))
+                self.G[node][neighbor]['weight'] = new_weight
+                
+    def update_opinions_and_weights(self):
+        
+        for node in self.G.nodes():
+            sociability = self.SOCIABILITY
+            opinions = []
+            weights = []
+
+            for i in self.WEIGHT[node]:
+                if abs(self.OPINIONS[i] - self.OPINIONS[node]) > sociability:
+                    continue
+                opinions.append(self.OPINIONS[i])
+                weights.append(self.WEIGHT[node][i])
+
+            if sum(weights) == 0:
+                continue
+            
+            else:
+                consensus = np.average(opinions, weights=weights)
+                
+                old_opinion = self.OPINIONS[node]
+                new_opinion = old_opinion + sociability * (consensus - old_opinion) + np.random.normal(0, 0.01)
+                
+                self.OPINIONS[node] = np.clip(new_opinion, 0, 1)
+
+            for i in self.WEIGHT[node]:
+                old_diff = abs(self.OPINIONS[i] - old_opinion)
+                new_diff = abs(self.OPINIONS[i] - new_opinion)
+                
+                if new_diff != 0:
+                    weight_adjustment = old_diff / new_diff
+                else:
+                    weight_adjustment = 1.0  # Max weight if new_diff is 0 (opinions are identical)
+                
+                # Increase the weights a bit for popular agents
+                self.WEIGHT[node][i] *= ((1-sociability) + (self.IN[i] / max(self.IN) * sociability))
+                noise = np.random.normal(0, 0.01)  # Adding noise to the weight adjustment
+                self.WEIGHT[node][i] *= weight_adjustment + noise
+                
+                
+                # Clip weights between 0 and 1
+                self.WEIGHT[node][i] = np.clip(self.WEIGHT[node][i], 0, 1)
+                
+    def update_opinions_and_weights_option2(self):
+        
+        for node in self.G.nodes():
+            sociability = self.SOCIABILITY
+            opinions = []
+            weights = []
+
+            for i in self.WEIGHT[node]:
+                if abs(self.OPINIONS[i] - self.OPINIONS[node]) > sociability:
+                    continue
+                opinions.append(self.OPINIONS[i])
+                weights.append(self.WEIGHT[node][i])
+
+            if sum(weights) == 0:
+                continue
+            
+            else:
+                consensus = np.average(opinions, weights=weights)
+                
+                old_opinion = self.OPINIONS[node]
+                new_opinion = old_opinion + sociability * (consensus - old_opinion) + np.random.normal(0, 0.01)
+                
+                self.OPINIONS[node] = np.clip(new_opinion, 0, 1)
+
+            for i in self.WEIGHT[node]:
+                opinion_diff = abs(self.OPINIONS[i] - new_opinion) 
+                
+                self.WEIGHT[node][i] = (1 - opinion_diff) 
+                # Decrease the weights a bit for unpopular agents
+                # Sociability is a value around 0.1, this results in a factor which is <1 for unpopular 
+                # agents and 1 for most popular agent
+                self.WEIGHT[node][i] *= ((1-sociability) + (self.IN[i] / max(self.IN) * sociability))
+                noise = np.random.normal(0, 0.01)  # Adding noise to the weight adjustment
+                self.WEIGHT[node][i] += noise
+                
+                
+                # Clip weights between 0 and 1
+                self.WEIGHT[node][i] = np.clip(self.WEIGHT[node][i], 0, 1)
 
     def utility_score(self, follower, followee):
-        # normalize popularity by in_connections / total_connections
-     
-        #U_popularity = 0.5 * self.IN[followee] / max(self.IN) + 0.5 * (1 - self.IN[follower] / max(self.IN))
         U_popularity = self.IN[followee] / max(self.IN) 
         U_similarity = 1 - abs(self.OPINIONS[follower] - self.OPINIONS[followee])
-        #U_proximity = 0.5 * (1 - self.IN[follower] / max(self.IN))
         # 1 / shortestpath, shortest_path is int >= 2
         U_proximity = 1 - (self.SHORTEST_PATH[follower][followee] / max(self.SHORTEST_PATH[follower].values()))
 
@@ -157,9 +226,7 @@ class SocialNetwork():
 
 
     def decide_to_unfollow(self, follower, followee):
-        #U_total = 0.4 * self.WEIGHT[follower][followee] + 0.3 * self.IN[followee]/max(self.IN) + 0.3 * (1 - self.IN[follower]/max(self.IN))
         if self.WEIGHT[follower][followee] <= np.random.uniform(0,1):
-        #if U_total <= np.random.uniform(0,1):
             return True
         else:
             return False
@@ -178,14 +245,11 @@ class SocialNetwork():
             else:
                 # have number of weights match the number of agents 
                 agents.remove(followee)
-            # distances.append(self.SHORTEST_PATH[agent][followee])
         distances = np.array(distances)
         if len(distances) == 0:
             return
         
         exponents = (distances / max(self.SHORTEST_PATH) - self.mu) / self.temperature
-        #print(exponents)
-        #exponents = (distances / max(distances) - self.mu) / self.temperature
         probs = expit(-exponents)
    
         total_prob = np.sum(probs)
@@ -218,9 +282,10 @@ class SocialNetwork():
 
 
     def track_metrics(self):
-        avg_degree = sum(nx.average_degree_connectivity(self.G).values()) / self.n_agents
-        avg_clustering_coeff = nx.average_clustering(self.G)
-        centrality = nx.betweenness_centrality(self.G)
+        #avg_degree = sum(nx.average_degree_connectivity(self.G).values()) / self.n_agents
+        avg_degree = (sum(self.IN.values()) + sum(self.OUT.values())) / self.n_agents
+        avg_clustering_coeff = nx.average_clustering(self.G, weight='weight')
+        centrality = nx.betweenness_centrality(self.G, weight='weight')
         degree_sequence = sorted([d for n, d in self.G.degree()], reverse=True)
         
         
