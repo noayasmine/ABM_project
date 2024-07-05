@@ -5,7 +5,6 @@ import os
 
 
 
-
 combinations = []
 
 # Iterate over possible values of a, b, c in increments of 0.1
@@ -16,12 +15,10 @@ for a in range(0, 11):  # This corresponds to 0 to 1 in steps of 0.1
                 combinations.append((a / 10, b / 10, c / 10))  # Convert back to original scale
 
 
-n_agents = 100
+n_agents = 75
 prob = 0.5
-sociability = 0.09
-mu = 0.3
-temp = 0.1
-steps = 800
+sociability = 0.1
+steps = 500
 
 
 # Define the new folder name
@@ -31,7 +28,7 @@ output_folder = 'simulation_results'
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)
 
-n_repeats = 20  # Number of repetitions for each combination
+n_repeats = 5  # Number of repetitions for each combination
 
 for i in range(len(combinations)):
     print(f"Combination {i+1}/{len(combinations)}")
@@ -42,7 +39,7 @@ for i in range(len(combinations)):
     for repeat in range(n_repeats):
         print(f"  Repeat {repeat+1}/{n_repeats}")
         # Initialize the model
-        model = SocialNetwork(n_agents, prob, w_pop, w_prox, w_sim, mu, temp, sociability)
+        model = SocialNetwork(n_agents, prob, w_pop, w_prox, w_sim, sociability)
         
         for k in range(steps + 1):
             model.step()
