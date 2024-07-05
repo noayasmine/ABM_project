@@ -37,7 +37,7 @@ for i in range(steps + 1):
     model.step()
     print(f"\rProgress: {(i / steps) * 100:.2f}%", end='', flush=True)
 
-
+# print(model.OPINIONS)
 #end_opinions = pd.DataFrame({'Opinions': model.OPINIONS})
 #end_opinions.to_csv("end_opinions.csv", index=False)
 
