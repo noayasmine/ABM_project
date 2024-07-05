@@ -86,9 +86,10 @@ class SocialNetwork():
         self.SHORTEST_PATH = dict(nx.shortest_path_length(self.G))
    
     def update_opinions_and_weights(self):
-        for j, node in enumerate(self.G.nodes()):
+        for node in self.G.nodes():
             opinions = []
             weights = []
+            new_weights = []
             
             for i in self.WEIGHT[node]:
                 if abs(self.OPINIONS[i] - self.OPINIONS[node]) > self.SOCIABILITY:
@@ -97,33 +98,46 @@ class SocialNetwork():
                 weights.append(self.WEIGHT[node][i])
                 
             if sum(weights) == 0:
-                consensus = 0.5
+                continue
                 
             else:
                 consensus = np.average(opinions, weights=weights)
+                 
+                old_opinion = self.OPINIONS[node]
+                new_opinion = old_opinion + self.SOCIABILITY * (consensus - old_opinion) + np.random.normal(0, 0.01)
                 
-            old_opinion = self.OPINIONS[node]
-            new_opinion = old_opinion + self.SOCIABILITY * (consensus - old_opinion) + np.random.normal(0,0.01)
-            self.OPINIONS[node] = np.clip(new_opinion, 0, 1)
-       
-            # update weights based on difference of opinion
+                self.OPINIONS[node] = np.clip(new_opinion, 0, 1)
+            
+            for i in self.WEIGHT[node]:
+                old_diff = abs(self.OPINIONS[i] - old_opinion)
+                new_diff = abs(self.OPINIONS[i] - new_opinion)
+                
+                if new_diff != 0:
+                    weight_adjustment = old_diff / new_diff
+                else:
+                    weight_adjustment = 1.0  # Max weight if new_diff is 0 (opinions are identical)
+                
+                # Increase the weights a bit for popular agents
+                self.WEIGHT[node][i] *= ((1-self.SOCIABILITY) + (self.IN[i] / max(self.IN) * self.SOCIABILITY))
+                noise = np.random.normal(0, 0.01)  # Adding noise to the weight adjustment
+                self.WEIGHT[node][i] *= weight_adjustment + noise
+
+                # Clip weights between 0 and 1
+                #self.WEIGHT[node][i] = np.clip(self.WEIGHT[node][i], 0, 1)
+                new_weights.append(self.WEIGHT[node][i])
+                
             for i in self.WEIGHT[node]:
                 new_weight = self.WEIGHT[node][i]
-                # weights between 0 and 1
-                min_weight = np.min(weights) if len(weights) != 0 else 0
-                max_weight = np.max(weights) if len(weights) != 0 else 1
+                min_weight = np.min(new_weights) if len(new_weights) != 0 else 0
+                max_weight = np.max(new_weights) if len(new_weights) != 0 else 1
+                
                 if max_weight == 0:
                     max_weight = 1
                     min_weight = 0
-                    
-                # otherwise it threw some errors when the average degree was low by initializing
                 if max_weight - min_weight == 0:
                     continue
                 else:
-                    self.WEIGHT[node][i] = (new_weight-min_weight+0.001)/(max_weight-min_weight+0.001)
-                
-                self.WEIGHT[node][i] *= ((1-self.SOCIABILITY) + (self.IN[i] / max(self.IN) * self.SOCIABILITY))
-                self.G[node][i]['weight'] = new_weight
+                    self.WEIGHT[node][i] = (new_weight - min_weight + 0.001) / (max_weight - min_weight + 0.001)
 
     def utility_score(self, follower, followee):
         # normalize popularity by in_connections / total_connections
