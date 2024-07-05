@@ -32,6 +32,8 @@ import networkx as nx
 import random as r
 from collections import defaultdict
 from scipy.special import expit
+import networkx.algorithms.community as nx_comm
+
 
 
 class SocialNetwork():
@@ -60,7 +62,7 @@ class SocialNetwork():
         self.SHORTEST_PATH = defaultdict(int)
         self.Data_Collector = {"max IN degrees": [], "avg degrees": [],
                                "avg clustering coeff" : [], "betweenness centrality" : [], 
-                               "degree sequence": [], "IN degree": []}
+                               "degree sequence": [], "IN degree": [], "modularity":[]}
         
         self.create_random_network()
    
@@ -81,12 +83,13 @@ class SocialNetwork():
         self.SHORTEST_PATH = dict(nx.shortest_path_length(self.G))
    
     
-    def update_opinions_and_weights(self,last_step=False):
+    def update_opinions_and_weights(self):
         
         for node in self.G.nodes():
             sociability = self.SOCIABILITY
             opinions = []
             weights = []
+            new_weights = []
 
             for i in self.WEIGHT[node]:
                 if abs(self.OPINIONS[i] - self.OPINIONS[node]) > sociability:
@@ -104,7 +107,7 @@ class SocialNetwork():
                 new_opinion = old_opinion + sociability * (consensus - old_opinion) + np.random.normal(0, 0.01)
                 
                 self.OPINIONS[node] = np.clip(new_opinion, 0, 1)
-
+            
             for i in self.WEIGHT[node]:
                 old_diff = abs(self.OPINIONS[i] - old_opinion)
                 new_diff = abs(self.OPINIONS[i] - new_opinion)
@@ -121,9 +124,54 @@ class SocialNetwork():
                 
                 
                 # Clip weights between 0 and 1
-                self.WEIGHT[node][i] = np.clip(self.WEIGHT[node][i], 0, 1)
+                #self.WEIGHT[node][i] = np.clip(self.WEIGHT[node][i], 0, 1)
+                new_weights.append(self.WEIGHT[node][i])
                 
+            for i in self.WEIGHT[node]:
+                new_weight = self.WEIGHT[node][i]
+                min_weight = np.min(new_weights) if len(new_weights) != 0 else 0
+                max_weight = np.max(new_weights) if len(new_weights) != 0 else 1
+                
+                if max_weight == 0:
+                    max_weight = 1
+                    min_weight = 0
+                if max_weight - min_weight == 0:
+                    continue
+                else:
+                    self.WEIGHT[node][i] = (new_weight - min_weight + 0.001) / (max_weight - min_weight + 0.001)
+                    
+                
+    def update_opinions_and_weights_only_opinion(self):
+        
+        for node in self.G.nodes():
+            sociability = self.SOCIABILITY
+            opinions = []
+            weights = []
+            new_weights = []
 
+            for i in self.WEIGHT[node]:
+                if abs(self.OPINIONS[i] - self.OPINIONS[node]) > sociability:
+                    continue
+                opinions.append(self.OPINIONS[i])
+                weights.append(self.WEIGHT[node][i])
+
+            if sum(weights) == 0:
+                continue
+            
+            else:
+                consensus = np.average(opinions, weights=weights)
+                
+                old_opinion = self.OPINIONS[node]
+                new_opinion = old_opinion + sociability * (consensus - old_opinion) + np.random.normal(0, 0.01)
+                
+                self.OPINIONS[node] = np.clip(new_opinion, 0, 1)
+            
+            for i in self.WEIGHT[node]:
+                diff = abs(self.OPINIONS[i] - old_opinion)
+                noise = np.random.normal(0, 0.01)  # Adding noise to the weight adjustment
+                self.WEIGHT[node][i] = (1 - diff) + noise #+ 0.2*((1-sociability) + (self.IN[i] / max(self.IN) * sociability))
+                
+                
                 
                 
     
@@ -208,7 +256,10 @@ class SocialNetwork():
         avg_clustering_coeff = nx.average_clustering(self.G)
         centrality = nx.betweenness_centrality(self.G)
         degree_sequence = sorted([d for n, d in self.G.degree()], reverse=True)
-        
+        communities = nx_comm.greedy_modularity_communities(self.G)
+
+        # Calculate modularity
+        modularity = nx_comm.modularity(self.G, communities)
         
         self.Data_Collector["max IN degrees"].append(max(self.IN.values()))
         self.Data_Collector["avg degrees"].append(avg_degree)
@@ -216,6 +267,7 @@ class SocialNetwork():
         self.Data_Collector["betweenness centrality"].append(centrality)
         self.Data_Collector["degree sequence"].append(degree_sequence)
         self.Data_Collector["IN degree"].append(self.IN.values())
+        self.Data_Collector["modularity"].append(modularity)
 
 
     def step(self):
