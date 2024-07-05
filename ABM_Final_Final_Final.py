@@ -123,10 +123,6 @@ class SocialNetwork():
                 # Clip weights between 0 and 1
                 self.WEIGHT[node][i] = np.clip(self.WEIGHT[node][i], 0, 1)
                 
-                #self.G[node][i]['weight'] = self.WEIGHT[node][i]
-                #if last_step:
-                    #print('ADDING WEIGHTS')
-                    #self.G[node][i]['weight'] = self.WEIGHT[node][i]
 
                 
                 
@@ -179,7 +175,7 @@ class SocialNetwork():
         #exponents = (distances / max(self.SHORTEST_PATH) - self.mu) / self.temperature
         #probs = expit(-exponents)
         
-        exponents = ((distances / max(distances) - self.SOCIABILITY) / (0.01 + (0.99 * (1-self.w_prox))))
+        exponents = ((distances / max(self.SHORTEST_PATH) - self.SOCIABILITY) / (0.01 + (0.99 * (1-self.w_prox))))
         probs = 1/(1+np.exp(-exponents))
 
         encounter = r.choices(agents, weights=probs, k=1)
@@ -207,8 +203,10 @@ class SocialNetwork():
     def track_metrics(self):
         #avg_degree = sum(nx.average_degree_connectivity(self.G).values()) / self.n_agents
         avg_degree = (sum(self.IN.values()) + sum(self.OUT.values())) / self.n_agents
-        avg_clustering_coeff = nx.average_clustering(self.G, weight='weight')
-        centrality = nx.betweenness_centrality(self.G, weight='weight')
+        #avg_clustering_coeff = nx.average_clustering(self.G, weight='weight')
+        #centrality = nx.betweenness_centrality(self.G, weight='weight')
+        avg_clustering_coeff = nx.average_clustering(self.G)
+        centrality = nx.betweenness_centrality(self.G)
         degree_sequence = sorted([d for n, d in self.G.degree()], reverse=True)
         
         
@@ -220,7 +218,7 @@ class SocialNetwork():
         self.Data_Collector["IN degree"].append(self.IN.values())
 
 
-    def step(self,last_step=False):
+    def step(self):
         # initialize list to keep track how the network should change
         edges_to_add = []
         edges_to_remove = []
@@ -249,10 +247,8 @@ class SocialNetwork():
         for follower, followee in edges_to_add:
             self.add_connection(follower, followee)
 
-
         for follower, exfollowee in edges_to_remove:
             self.remove_connection(follower, exfollowee)
-
 
         self.update_opinions_and_weights()
         self.track_metrics()
