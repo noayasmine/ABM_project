@@ -35,15 +35,13 @@ from scipy.special import expit
 
 
 class SocialNetwork():
-    def __init__(self, n_agents, prob, w_pop, w_prox, w_sim, mu, temp, sociability):
+    def __init__(self, n_agents, prob, w_pop, w_prox, w_sim, sociability):
         self.n_agents = n_agents
         self.prob = prob
         self.w_pop = w_pop
         self.w_prox = w_prox
         self.w_sim = w_sim
         self.prob = prob
-        self.mu = mu
-        self.temperature = temp
 
         # {Node1 : IN_Degree, Node2 : IN_Degree}
         self.IN = defaultdict(int)
@@ -54,7 +52,6 @@ class SocialNetwork():
         self.WEIGHT = defaultdict(lambda: defaultdict(float))
         # for engagement received from follower: self.UTILITIES[influencer][follower]
         # for total engagement: sum(self.UTILITIES[influencer].values())
-        self.UTILITIES = defaultdict(lambda: defaultdict(float))
         self.OPINIONS = {i: r.uniform(0, 1) for i in range(n_agents)}
         self.MAX = defaultdict(int)
 
@@ -83,35 +80,30 @@ class SocialNetwork():
                 engagements = np.random.uniform(0,1,len(out_edges))
                 for (u, v), engagement in zip(out_edges, engagements):
                     self.WEIGHT[u][v] = engagement
-                    self.UTILITIES[v][u] = engagement
                     self.OUT[u] += 1
                     self.IN[v] += 1
             self.MAX[node] = r.choice(range(self.G.out_degree(node), self.n_agents))
         self.SHORTEST_PATH = dict(nx.shortest_path_length(self.G))
    
     def update_opinions_and_weights(self):
-        # conformity is the rate an agent changes their opinion to match their neighborhood
-        # we probably should make it a random parameter for each agent
-        # or a global parameter?
-        # conformity = 0.1
         for j, node in enumerate(self.G.nodes()):
-            conformity = self.SOCIABILITY
-            tolerance = self.SOCIABILITY
             opinions = []
             weights = []
             
             for i in self.WEIGHT[node]:
-                if abs(self.OPINIONS[i] - self.OPINIONS[node]) > tolerance:
+                if abs(self.OPINIONS[i] - self.OPINIONS[node]) > self.SOCIABILITY:
                     continue
                 opinions.append(self.OPINIONS[i])
                 weights.append(self.WEIGHT[node][i])
                 
             if sum(weights) == 0:
                 consensus = 0.5
+                
             else:
                 consensus = np.average(opinions, weights=weights)
+                
             old_opinion = self.OPINIONS[node]
-            new_opinion = old_opinion + conformity*(consensus - old_opinion) + np.random.normal(0,0.01)
+            new_opinion = old_opinion + self.SOCIABILITY * (consensus - old_opinion) + np.random.normal(0,0.01)
             self.OPINIONS[node] = np.clip(new_opinion, 0, 1)
        
             # update weights based on difference of opinion
@@ -123,14 +115,15 @@ class SocialNetwork():
                 if max_weight == 0:
                     max_weight = 1
                     min_weight = 0
+                    
                 # otherwise it threw some errors when the average degree was low by initializing
                 if max_weight - min_weight == 0:
                     continue
                 else:
                     self.WEIGHT[node][i] = (new_weight-min_weight+0.001)/(max_weight-min_weight+0.001)
-                #print((0.95 + (self.IN[i] / max(self.IN) * 0.05)))
                 
                 self.WEIGHT[node][i] *= ((1-self.SOCIABILITY) + (self.IN[i] / max(self.IN) * self.SOCIABILITY))
+                self.G[node][i]['weight'] = new_weight
 
     def utility_score(self, follower, followee):
         # normalize popularity by in_connections / total_connections
@@ -182,11 +175,17 @@ class SocialNetwork():
         distances = np.array(distances)
         if len(distances) == 0:
             return
-        exponents = (distances / max(self.SHORTEST_PATH) - self.mu) / self.temperature
-        #print(exponents)
-        #exponents = (distances / max(distances) - self.mu) / self.temperature
+        # exponents = (distances / max(self.SHORTEST_PATH) - self.mu) / self.temperature
+        # #print(exponents)
+        # #exponents = (distances / max(distances) - self.mu) / self.temperature
+        # probs = expit(-exponents)
+
+        # exponents = (distances / max(self.SHORTEST_PATH) - 0.3) / 0.1
+        exponents = (distances / max(self.SHORTEST_PATH) - self.SOCIABILITY) / (0.01 + (0.99 * (1-self.w_prox)))
         probs = expit(-exponents)
-   
+        # exponents = ((distances / max(distances) - self.SOCIABILITY) / (0.01 + (0.99 * (1-self.w_prox))))
+        # probs = 1/(1+np.exp(exponents))
+        # probs = expit(exponents)
         total_prob = np.sum(probs)
         if total_prob == 0:
             norm_probs = np.zeros_like(probs)
@@ -202,7 +201,6 @@ class SocialNetwork():
             self.G.add_edge(follower, followee)
             engagement = r.uniform(0, 1)
             self.WEIGHT[follower][followee] = engagement
-            self.UTILITIES[followee][follower] = engagement
             self.OUT[follower] += 1
             self.IN[followee] += 1
 
@@ -211,13 +209,12 @@ class SocialNetwork():
         if self.G.has_edge(follower, followee):
             self.G.remove_edge(follower, followee)
             del self.WEIGHT[follower][followee]
-            del self.UTILITIES[followee][follower]
             self.OUT[follower] -= 1
             self.IN[followee] -= 1
 
 
     def track_metrics(self):
-        avg_degree = sum(nx.average_degree_connectivity(self.G).values()) / self.n_agents
+        avg_degree = (sum(self.IN.values()) + sum(self.OUT.values())) / self.n_agents
         avg_clustering_coeff = nx.average_clustering(self.G)
         centrality = nx.betweenness_centrality(self.G)
         degree_sequence = sorted([d for n, d in self.G.degree()], reverse=True)

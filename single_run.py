@@ -14,7 +14,7 @@ File to do a single run of the model.
 First initialize parameters, then it runs the model and show some data.
 """
 # Parameters
-steps = 800
+steps = 1250
 n_agents = 75
 prob = 0.5
 
@@ -30,7 +30,8 @@ temp = 0.1  # Initial guess for temperature
 sociability=0.09
 
 # Initialize and run the model
-model = SocialNetwork(n_agents, prob, w_popularity, w_proximity, w_similarity, mu, temp, sociability)
+# model = SocialNetwork(n_agents, prob, w_popularity, w_proximity, w_similarity, mu, temp, sociability)
+model = SocialNetwork(n_agents, prob, w_popularity, w_proximity, w_similarity, sociability)
 
 for i in range(steps + 1):
     model.step()
