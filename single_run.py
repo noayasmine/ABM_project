@@ -20,8 +20,8 @@ prob = 0.5
 
 
 # how important either of these things is (this decides whom to have an interaction with)
-w_popularity = 0.2
-w_proximity = 0.7
+w_popularity = 0.15
+w_proximity = 0.75
 w_similarity = 0.1
 k_graph = int(prob)
 p_graph = 0.5
@@ -37,7 +37,7 @@ for i in range(steps + 1):
     model.step()
     print(f"\rProgress: {(i / steps) * 100:.2f}%", end='', flush=True)
 
-
+# print(model.OPINIONS)
 #end_opinions = pd.DataFrame({'Opinions': model.OPINIONS})
 #end_opinions.to_csv("end_opinions.csv", index=False)
 
