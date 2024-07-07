@@ -31,7 +31,6 @@ import pandas as pd
 import networkx as nx
 import random as r
 from collections import defaultdict
-from scipy.special import expit
 import networkx.algorithms.community as nx_comm
 
 
@@ -62,7 +61,7 @@ class SocialNetwork():
         self.SHORTEST_PATH = defaultdict(int)
         self.Data_Collector = {"max IN degrees": [], "avg degrees": [],
                                "avg clustering coeff" : [], "betweenness centrality" : [], 
-                               "degree sequence": [], "IN degree": [], "modularity":[]}
+                               "IN degree": [], "modularity":[]}
         
         self.create_random_network()
    
@@ -251,17 +250,23 @@ class SocialNetwork():
         #centrality = nx.betweenness_centrality(self.G, weight='weight')
         avg_clustering_coeff = nx.average_clustering(self.G)
         centrality = nx.betweenness_centrality(self.G)
-        degree_sequence = sorted([d for n, d in self.G.degree()], reverse=True)
+        # degree_sequence = sorted([d for n, d in self.G.degree()], reverse=True)
+            
         communities = nx_comm.greedy_modularity_communities(self.G)
-
-        # Calculate modularity
-        modularity = nx_comm.modularity(self.G, communities)
         
-        self.Data_Collector["max IN degrees"].append(max(self.IN.values()))
+        if self.G.number_of_edges() == 0:
+            modularity = np.NaN
+            max_IN = 0
+        # Calculate modularity
+        else:
+            modularity = nx_comm.modularity(self.G, communities)
+            max_IN = max(self.IN.values())
+        
+        self.Data_Collector["max IN degrees"].append(max_IN)
         self.Data_Collector["avg degrees"].append(avg_degree)
         self.Data_Collector["avg clustering coeff"].append(avg_clustering_coeff)
         self.Data_Collector["betweenness centrality"].append(centrality)
-        self.Data_Collector["degree sequence"].append(degree_sequence)
+        # self.Data_Collector["degree sequence"].append(degree_sequence)
         self.Data_Collector["IN degree"].append(self.IN.values())
         self.Data_Collector["modularity"].append(modularity)
 

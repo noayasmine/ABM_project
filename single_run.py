@@ -14,7 +14,7 @@ File to do a single run of the model.
 First initialize parameters, then it runs the model and show some data.
 """
 # Parameters
-steps = 1250
+steps = 300
 n_agents = 75
 prob = 0.5
 
