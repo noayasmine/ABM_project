@@ -34,7 +34,6 @@ from collections import defaultdict
 import networkx.algorithms.community as nx_comm
 
 
-
 class SocialNetwork():
     def __init__(self, n_agents, prob, w_pop, w_prox, w_sim, sociability):
         self.n_agents = n_agents
