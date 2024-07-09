@@ -2,36 +2,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-@author Francijn
+@authors Francijn, Saulo, Noa and Rafael
+Goal of the project
 
+summary of the code/abstract
 
-24/06 - in each time step; an agent has an encounter with someone.
-The choice with whom an agent has an encounter with is probabilistic:
-and based on path length --> fermi durac distribution
-
-
-Then depending on whether this encountered agent is already being followed or not;
-the agent takes an action:
-    if not following yet:
-        if total_utility > random_uniform_utility:
-            follow
-        else
-            do nothing
-    if already following:
-        if engagement is lower than engagement threshold (also set per simulation):
-            unfollow
-        else
-            do nothing
-
-
+What this file is & does
 """
 
 import numpy as np
-import pandas as pd
 import networkx as nx
 import random as r
 from collections import defaultdict
 import networkx.algorithms.community as nx_comm
+import sys
 
 
 class SocialNetwork():
@@ -43,6 +27,10 @@ class SocialNetwork():
         self.w_sim = w_sim
         self.prob = prob
 
+        if self.w_pop + self.w_sim + self.w_prox != 1:
+            print("make sure the weights of w_pop, w_prox and w_sim add to 1")
+            raise ValueError
+    
         # {Node1 : IN_Degree, Node2 : IN_Degree}
         self.IN = defaultdict(int)
         # {Node1 : OUT_Degree, Node2 : OUT_Degree}
@@ -50,10 +38,7 @@ class SocialNetwork():
         # {Node1 : {Follower1 : Engagement, Follower2 : Engagement}, Node2 : ETC}
         # for user engagement: self.WEIGHT[follower][influencer]
         self.WEIGHT = defaultdict(lambda: defaultdict(float))
-        # for engagement received from follower: self.UTILITIES[influencer][follower]
-        self.UTILITIES = defaultdict(lambda: defaultdict(float))
         self.OPINIONS = {i: r.uniform(0, 1) for i in range(n_agents)}
-        self.MAX = defaultdict(int)
 
         self.SOCIABILITY = sociability
 
@@ -74,10 +59,8 @@ class SocialNetwork():
                 engagements = np.random.uniform(0,1,len(out_edges))
                 for (u, v), engagement in zip(out_edges, engagements):
                     self.WEIGHT[u][v] = engagement
-                    self.UTILITIES[v][u] = engagement
                     self.OUT[u] += 1
                     self.IN[v] += 1
-            self.MAX[node] = r.choice(range(self.G.out_degree(node), self.n_agents))
         self.SHORTEST_PATH = dict(nx.shortest_path_length(self.G))
    
     
@@ -228,7 +211,6 @@ class SocialNetwork():
             self.G.add_edge(follower, followee)
             engagement = r.uniform(0, 1)
             self.WEIGHT[follower][followee] = engagement
-            self.UTILITIES[followee][follower] = engagement
             self.OUT[follower] += 1
             self.IN[followee] += 1
 
@@ -237,7 +219,6 @@ class SocialNetwork():
         if self.G.has_edge(follower, followee):
             self.G.remove_edge(follower, followee)
             del self.WEIGHT[follower][followee]
-            del self.UTILITIES[followee][follower]
             self.OUT[follower] -= 1
             self.IN[followee] -= 1
 
