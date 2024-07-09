@@ -12,4 +12,4 @@ A batch run can be done by the batchrun_steps0.1.py file. In this file, you can 
 
 The ternary plots can be made using the merging_data_ternaryplots.ipynb, where first the data is merged and then the repetitions are averaged and finally the ternary plots for clustering coefficient and modularity are made.
 
-Lastly, the Sobol Sensitivity Analysis can be done by using the SA_Sobol_ABM_parallel.
+Lastly, the Sobol Sensitivity Analysis can be done by using the SA_sobol_ABM_parallel.ipynb file. 
