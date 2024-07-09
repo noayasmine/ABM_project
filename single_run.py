@@ -3,11 +3,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import networkx as nx
 import seaborn as sns
-import numpy as np
-from scipy.optimize import curve_fit
-
-# import powerlaw
-
 
 """"
 File to do a single run of the model. 
@@ -129,4 +124,4 @@ def plot_degree_distribution(G):
 plot_metrics(df_results)
 #plot_network(model.G, model.WEIGHT)
 #check_network_connectivity(model.G)
-plot_degree_distribution(model.G)
+#plot_degree_distribution(model.G)
