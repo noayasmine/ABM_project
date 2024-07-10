@@ -6,12 +6,10 @@ In this project, we aimed to investigate the interplay between various recommend
 
 The model itself is in the model.py file.
 
-You can simulate a single run by the single_run.py file. First choose the values of the parameters n_agents, steps, prob, sociability, w_sim, w_pop, w_prox where the sum of the last values should add to 1.
-
 A batch run can be done by the batchrun.py file. In this file, you can run the same experiments as we did; where we varied the values for w_sim, w_pop, and w_prox in steps of 0.1, making sure they always added up to 1. Furthermore, you can decide for how many repetitions you would like to run these parameter combinations.
 
 The ternary plots can be made using the merging_data_ternaryplots.ipynb, where first the data is merged and then the repetitions are averaged and finally the ternary plots for clustering coefficient and modularity are made.
 
-The fermi-dirac file was used to get insight into how the probability distribution was for certain values for mu and T.
+The single_run.ipynb is a notebook that plots a single run, as well as the fermi dirac distribution as mentioned in the report. This file also runs a batch to determine values for the parameters (weights and sociability) that give the best follower distribution / opinion distribution and convergence of metrics.
 
 Lastly, the Sobol Sensitivity Analysis can be done by using the SA_sobol_ABM_parallel.ipynb file. 
