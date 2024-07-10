@@ -59,7 +59,7 @@ class SocialNetwork():
    
     def create_random_network(self):
         """
-        function to initialize the network. We also initialize the values between the edges,
+        Function to initialize the network. We also initialize the values between the edges,
         for now it is just a random value between 0 and 1.
         """
         # create Erdos Renyi graph
