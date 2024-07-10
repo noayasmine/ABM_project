@@ -28,8 +28,10 @@ if not os.path.exists(output_folder):
 
 n_repeats = 5  # Number of repetitions for each combination
 
+
 for i in range(len(combinations)):
     print(f"Combination {i+1}/{len(combinations)}")
+    # assign a value within the combinations to each of the weights
     w_pop = combinations[i][0]
     w_prox = combinations[i][1]
     w_sim = combinations[i][2]

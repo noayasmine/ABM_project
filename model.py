@@ -3,6 +3,7 @@
 # -*- coding: utf-8 -*-
 """
 @authors Francijn, Saulo, Noa and Rafael
+
 In this project, we aimed to investigate the interplay between
 various recommendation strategies and their effects on network polarization
 and structural dynamics. Specifically, we focused on how different
@@ -48,9 +49,7 @@ class SocialNetwork():
         # for user engagement: self.WEIGHT[follower][influencer]
         self.WEIGHT = defaultdict(lambda: defaultdict(float))
         self.OPINIONS = {i: r.uniform(0, 1) for i in range(n_agents)}
-
         self.SOCIABILITY = sociability
-
         self.SHORTEST_PATH = defaultdict(int)
         self.Data_Collector = {"max IN degrees": [], "avg degrees": [],
                                "avg clustering coeff" : [], "betweenness centrality" : [], 
@@ -59,9 +58,15 @@ class SocialNetwork():
         self.create_random_network()
    
     def create_random_network(self):
+        """
+        function to initialize the network. We also initialize the values between the edges,
+        for now it is just a random value between 0 and 1.
+        """
+        # create Erdos Renyi graph
         self.G = nx.gnp_random_graph(n=self.n_agents, p=self.prob, directed=True)
 
-        # add weights to the edges
+        # add weights to the edges 
+        # (not to the actual network but we're keeping track in a dict)
         for node in self.G.nodes():
             out_edges = list(self.G.out_edges(node))
             if out_edges:
@@ -74,7 +79,9 @@ class SocialNetwork():
    
     
     def update_opinions_and_weights(self):
-        
+        """
+        function to update the opinions and the values in the edges.
+        """
         for node in self.G.nodes():
             sociability = self.SOCIABILITY
             opinions = []
@@ -184,7 +191,7 @@ class SocialNetwork():
             return False
    
     def have_encounter_with(self, agent):
-        """Use fermi-dirac"""
+        """Use fermi-dirac to decide which agent will be encountered"""
         agents = list(self.G.nodes())
         agents.remove(agent)  # Removing the agent itself from the list
    
@@ -197,6 +204,7 @@ class SocialNetwork():
             else:
                 # have number of weights match the number of agents 
                 agents.remove(followee)
+
         distances = np.array(distances)
         if len(distances) == 0:
             return
@@ -252,22 +260,21 @@ class SocialNetwork():
         edges_to_remove = []
         
         for node in self.G.nodes():
-
+            # each agent encounters another agent
             encountered = self.have_encounter_with(node)
             if not encountered:
                 continue
+
             # in this case the agent does not follow the potential followee yet
-           
             if self.SHORTEST_PATH[node][encountered] > 1:
-            # if the agent does not follow the person yet;
-            # decide if you want to follow (based on opinion similarity)
+            # decide if you want to follow (based on utility value)
                     if self.decide_to_follow(node, encountered):
                         edges_to_add.append((node, encountered))
                        
             # if the agent does already follow, check if you want to keep following
-            # based on engagement
             elif self.SHORTEST_PATH[node][encountered] == 1:
                 if self.decide_to_unfollow(node, encountered):
+                    # decide if you want to unfollow based on engagement
                     edges_to_remove.append((node, encountered))
                    
         # for computational reasons first all agents do an action
@@ -278,6 +285,10 @@ class SocialNetwork():
         for follower, exfollowee in edges_to_remove:
             self.remove_connection(follower, exfollowee)
 
+        # update every engagement value in the edges and 
+        # have agents slightly change their opinion based on neighborhood
         self.update_opinions_and_weights()
+        # collect data
         self.track_metrics()
+        # update the shortest_path dict for the next step
         self.SHORTEST_PATH = dict(nx.shortest_path_length(self.G))
