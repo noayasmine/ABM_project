@@ -1,4 +1,4 @@
-from ABM_Final_Final_Final import SocialNetwork
+from model import SocialNetwork
 import pandas as pd
 import matplotlib.pyplot as plt
 import networkx as nx

@@ -1,5 +1,4 @@
-import itertools
-from ABM_Final_Final_Final import SocialNetwork
+from model import SocialNetwork
 import pandas as pd
 import os
 
@@ -13,9 +12,10 @@ for a in range(0, 11):  # This corresponds to 0 to 1 in steps of 0.1
                 combinations.append((a / 10, b / 10, c / 10))  # Convert back to original scale
 
 
+# set the parameters
 n_agents = 75
-prob = 0.5
-sociability = 0.1
+prob = 0.5 # between 0 and 1
+sociability = 0.1 # between 0 and 1
 steps = 500
 
 

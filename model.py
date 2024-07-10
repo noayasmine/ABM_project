@@ -3,11 +3,22 @@
 # -*- coding: utf-8 -*-
 """
 @authors Francijn, Saulo, Noa and Rafael
-Goal of the project
+In this project, we aimed to investigate the interplay between
+various recommendation strategies and their effects on network polarization
+and structural dynamics. Specifically, we focused on how different
+combinations of factors, such as popularity, social proximity, and opinion similarity,
+in who-to-follow recommendations influence the evolving patterns of opinion formation
+and network evolution within a social network. 
 
-summary of the code/abstract
+Our primary research question was: In an opinion transmission and link creation model
+where agents consider popularity, social proximity, and opinion similarity as criteria
+to engage with other agents and their opinions, which of these characteristics will yield 
+a higher effect on shaping opinion polarization across the network?
 
-What this file is & does
+very short comment on the code itself maybe? 
+
+This model creates the model and defines the agents, steps and network itself.
+If you want to run the model, use single_run.py or batch_run.py.
 """
 
 import numpy as np
@@ -15,8 +26,6 @@ import networkx as nx
 import random as r
 from collections import defaultdict
 import networkx.algorithms.community as nx_comm
-import sys
-
 
 class SocialNetwork():
     def __init__(self, n_agents, prob, w_pop, w_prox, w_sim, sociability):
@@ -102,10 +111,6 @@ class SocialNetwork():
                 self.WEIGHT[node][i] *= ((1-sociability) + (self.IN[i] / max(self.IN) * sociability))
                 noise = np.random.normal(0, 0.01)  # Adding noise to the weight adjustment
                 self.WEIGHT[node][i] *= weight_adjustment + noise
-                
-                
-                # Clip weights between 0 and 1
-                #self.WEIGHT[node][i] = np.clip(self.WEIGHT[node][i], 0, 1)
                 new_weights.append(self.WEIGHT[node][i])
                 
             for i in self.WEIGHT[node]:
@@ -127,7 +132,6 @@ class SocialNetwork():
         for node in self.G.nodes():
             opinions = []
             weights = []
-            new_weights = []
 
             for i in self.WEIGHT[node]:
                 if abs(self.OPINIONS[i] - self.OPINIONS[node]) > sociability:
@@ -197,9 +201,6 @@ class SocialNetwork():
         if len(distances) == 0:
             return
         
-        #exponents = (distances / max(self.SHORTEST_PATH) - self.mu) / self.temperature
-        #probs = expit(-exponents)
-        
         exponents = ((distances / max(self.SHORTEST_PATH) - self.SOCIABILITY) / (0.01 + (0.99 * (1-self.w_prox))))
         probs = 1/(1+np.exp(-exponents))
 
@@ -224,14 +225,9 @@ class SocialNetwork():
 
 
     def track_metrics(self):
-        #avg_degree = sum(nx.average_degree_connectivity(self.G).values()) / self.n_agents
         avg_degree = (sum(self.IN.values()) + sum(self.OUT.values())) / self.n_agents
-        #avg_clustering_coeff = nx.average_clustering(self.G, weight='weight')
-        #centrality = nx.betweenness_centrality(self.G, weight='weight')
         avg_clustering_coeff = nx.average_clustering(self.G)
-        centrality = nx.betweenness_centrality(self.G)
-        # degree_sequence = sorted([d for n, d in self.G.degree()], reverse=True)
-            
+        centrality = nx.betweenness_centrality(self.G)            
         communities = nx_comm.greedy_modularity_communities(self.G)
         
         if self.G.number_of_edges() == 0:
@@ -246,7 +242,6 @@ class SocialNetwork():
         self.Data_Collector["avg degrees"].append(avg_degree)
         self.Data_Collector["avg clustering coeff"].append(avg_clustering_coeff)
         self.Data_Collector["betweenness centrality"].append(centrality)
-        # self.Data_Collector["degree sequence"].append(degree_sequence)
         self.Data_Collector["IN degree"].append(self.IN.values())
         self.Data_Collector["modularity"].append(modularity)
 
