@@ -73,8 +73,10 @@ class SocialNetwork():
                 engagements = np.random.uniform(0,1,len(out_edges))
                 for (u, v), engagement in zip(out_edges, engagements):
                     self.WEIGHT[u][v] = engagement
+                    # we are also keeping track of the in and out degree of each node
                     self.OUT[u] += 1
                     self.IN[v] += 1
+        # have a dict with the shortest_path_lengths for quick access
         self.SHORTEST_PATH = dict(nx.shortest_path_length(self.G))
    
     
@@ -132,45 +134,20 @@ class SocialNetwork():
                     continue
                 else:
                     self.WEIGHT[node][i] = (new_weight - min_weight + 0.001) / (max_weight - min_weight + 0.001)
-                    
-                
-    def update_opinions_and_weights_only_opinion(self):
-        sociability = self.SOCIABILITY
-        for node in self.G.nodes():
-            opinions = []
-            weights = []
-
-            for i in self.WEIGHT[node]:
-                if abs(self.OPINIONS[i] - self.OPINIONS[node]) > sociability:
-                    continue
-                opinions.append(self.OPINIONS[i])
-                weights.append(self.WEIGHT[node][i])
-
-            if sum(weights) == 0:
-                continue
-            
-            else:
-                consensus = np.average(opinions, weights=weights)
-                
-                old_opinion = self.OPINIONS[node]
-                new_opinion = old_opinion + sociability * (consensus - old_opinion) + np.random.normal(0, 0.01)
-                
-                self.OPINIONS[node] = np.clip(new_opinion, 0, 1)
-            
-            for i in self.WEIGHT[node]:
-                diff = abs(self.OPINIONS[i] - old_opinion)
-                noise = np.random.normal(0, 0.01)  # Adding noise to the weight adjustment
-                self.WEIGHT[node][i] = (1 - diff) + noise #+ 0.2*((1-sociability) + (self.IN[i] / max(self.IN) * sociability))
-                
-                
+               
 
     def utility_score(self, follower, followee):
+        # popularity is measured in comparison to the most popular agent in the network
         U_popularity = self.IN[followee] / max(self.IN) 
+
+        # similarity is the 1 - absolure value of the difference in opinion between the agents
         U_similarity = 1 - abs(self.OPINIONS[follower] - self.OPINIONS[followee])
-        # 1 / shortestpath, shortest_path is int >= 2
+
+        # if the shortest path is short in comparison to the longest shortest path to the agent,
+        # value will be high; otherwise low
         U_proximity = 1 - (self.SHORTEST_PATH[follower][followee] / max(self.SHORTEST_PATH[follower].values()))
 
-
+        # use the weights to adjust the total utility
         U_total = (self.w_pop * U_popularity +
                    self.w_sim * U_similarity +
                    self.w_prox * U_proximity)
@@ -178,6 +155,7 @@ class SocialNetwork():
         return U_total
    
     def decide_to_follow(self, follower, followee):
+        # check utility score and if high enough: follow
         if self.utility_score(follower,followee) >= np.random.uniform(0,1):
             return True
         else:
@@ -185,6 +163,7 @@ class SocialNetwork():
 
 
     def decide_to_unfollow(self, follower, followee):
+        # check the engagement value and if it is too low: unfollow
         if self.WEIGHT[follower][followee] <= np.random.uniform(0,1):
             return True
         else:
@@ -216,6 +195,7 @@ class SocialNetwork():
         return encounter[0]
    
     def add_connection(self, follower, followee):
+        # updating the network itself and our dicts that keep track of stuff
         if not self.G.has_edge(follower, followee):
             self.G.add_edge(follower, followee)
             engagement = r.uniform(0, 1)
@@ -225,6 +205,7 @@ class SocialNetwork():
 
 
     def remove_connection(self, follower, followee):
+        # updating the network itself and our dicts that keep track of stuff
         if self.G.has_edge(follower, followee):
             self.G.remove_edge(follower, followee)
             del self.WEIGHT[follower][followee]
