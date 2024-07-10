@@ -16,8 +16,6 @@ where agents consider popularity, social proximity, and opinion similarity as cr
 to engage with other agents and their opinions, which of these characteristics will yield 
 a higher effect on shaping opinion polarization across the network?
 
-very short comment on the code itself maybe? 
-
 This model creates the model and defines the agents, steps and network itself.
 If you want to run the model, use single_run.py or batch_run.py.
 """
